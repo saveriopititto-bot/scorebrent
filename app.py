@@ -5,155 +5,124 @@ import requests
 import io
 
 # ---------------------------------------------------------------------------
-# 1. Configurazione Endpoint Automatizzati
+# 1. Configurazione Endpoint ISMEA (Pagine Web HTML)
 # ---------------------------------------------------------------------------
-# Questa è la "mappa" che lega la UI all'infrastruttura di rete.
-# Se ISMEA espone file CSV statici o API interrogabili, inserisci qui gli URL 
-# o gli ID dei dataset.
 ISMEA_SOURCES = {
-    "Grano Duro": {
-        # Esempio A: URL diretto a un file aggiornato periodicamente
-        "url": "https://www.dati.gov.it/dataset/xxx/grano_duro.csv", 
-        "format": "csv",
-        "sep": ";"
-    },
-    "Mais Nazionale": {
-        "url": "https://www.dati.gov.it/dataset/yyy/mais.csv",
-        "format": "csv",
-        "sep": ";"
-    },
-    "Olio EVO": {
-        # Esempio B: Endpoint API REST (es. CKAN) che restituisce JSON
-        "url": "https://dati.ismea.it/api/3/action/datastore_search?resource_id=zzz",
-        "format": "json",
-        "sep": None
+    "Cereali (Pagina 439)": {
+        "url": "https://www.ismeamercati.it/flex/cm/pages/ServeBLOB.php/L/IT/IDPagina/439",
+        "format": "html"
     }
+    # Puoi aggiungere altre pagine ISMEA copiando l'URL e cambiando l'IDPagina
 }
 
 # ---------------------------------------------------------------------------
-# 2. Motore di Estrazione Automatizzato
+# 2. Motore di Scraping HTML
 # ---------------------------------------------------------------------------
 @st.cache_data(show_spinner=False, ttl=3600)
-def fetch_automated_data(product_key: str) -> pd.DataFrame:
+def fetch_html_data(product_key: str) -> pd.DataFrame:
     """
-    Recupera i dati automaticamente in base alla configurazione mappata.
+    Esegue lo scraping della pagina web ISMEA ed estrae la tabella dati.
     """
     config = ISMEA_SOURCES.get(product_key)
     if not config:
-        raise ValueError(f"Nessuna configurazione di rete per {product_key}")
+        raise ValueError(f"Nessuna configurazione per {product_key}")
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json, text/csv"
+        # Fingerprint di un browser reale per evitare di essere bloccati
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7"
     }
     
     try:
         response = requests.get(config["url"], headers=headers, timeout=15)
         response.raise_for_status()
         
-        if config["format"] == "csv":
-            df = pd.read_csv(io.StringIO(response.text), sep=config["sep"])
-        elif config["format"] == "json":
-            # Per le API CKAN standard, i record sono in result -> records
-            json_data = response.json()
-            if "result" in json_data and "records" in json_data["result"]:
-                df = pd.DataFrame(json_data["result"]["records"])
-            else:
-                df = pd.DataFrame(json_data) # Fallback generico
-        else:
-            df = pd.DataFrame()
+        # pandas.read_html estrae TUTTE le tabelle dalla pagina HTML in una lista di DataFrame.
+        # Parametri cruciali per l'Italia: decimal=',' e thousands='.'
+        tables = pd.read_html(
+            io.StringIO(response.text), 
+            decimal=',', 
+            thousands='.',
+            flavor='bs4' # Usa BeautifulSoup per un parsing più robusto
+        )
+        
+        if not tables:
+            st.error("Nessuna tabella HTML trovata nella pagina.")
+            return pd.DataFrame()
             
-        return df
+        # Euristica: di solito la tabella con i veri dati di mercato è quella con più righe/colonne
+        # Filtriamo le tabelle di layout minuscole
+        valid_tables = [t for t in tables if len(t) > 2 and len(t.columns) >= 2]
+        
+        if not valid_tables:
+            return pd.DataFrame()
+            
+        # Prendiamo la tabella più grande (quella con più celle)
+        best_table = max(valid_tables, key=lambda t: t.size)
+        return best_table
 
     except Exception as e:
-        st.error(f"Errore durante il prelievo automatizzato: {e}")
+        st.error(f"Errore durante lo scraping HTML: {e}")
         return pd.DataFrame()
 
-def process_ismea_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+def process_scraped_table(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Normalizza le colonne. Da calibrare sui nomi reali forniti da ISMEA.
+    Pulisce la tabella HTML grezza scaricata da ISMEA.
     """
     if df.empty:
         return df
         
-    col_mapping = {
-        "DATA_RILEVAZIONE": "Data",
-        "PREZZO_MEDIO": "Prezzo",
-        "PRODOTTO": "Prodotto"
-    }
+    # Spesso le tabelle web hanno intestazioni multi-livello o colonne sporche.
+    # Appiattiamo le colonne se sono MultiIndex
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = ['_'.join(map(str, col)).strip() for col in df.columns.values]
     
-    df = df.rename(columns={k: v for k, v in col_mapping.items() if k in df.columns})
+    # Rimuoviamo eventuali righe completamente vuote
+    df = df.dropna(how='all').copy()
     
-    if "Data" in df.columns and "Prezzo" in df.columns:
-        df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
-        # Gestisce i decimali italiani (virgola) se il dato arriva come stringa
-        if pd.api.types.is_string_dtype(df["Prezzo"]):
-            df["Prezzo"] = df["Prezzo"].str.replace(",", ".")
-        df["Prezzo"] = pd.to_numeric(df["Prezzo"], errors="coerce")
-        
-        df = df.dropna(subset=["Data", "Prezzo"]).sort_values("Data").reset_index(drop=True)
-        
+    # Poiché non conosciamo a priori il nome esatto delle colonne della pagina 439,
+    # convertiamo in stringhe per facilitare la diagnostica.
+    df = df.astype(str)
+    
     return df
 
 # ---------------------------------------------------------------------------
-# 3. Motore di Calcolo Differenziale
-# ---------------------------------------------------------------------------
-def compute_differentials(df: pd.DataFrame, window: int = 7) -> pd.DataFrame:
-    if df.empty or "Prezzo" not in df.columns or len(df) < 2:
-        return df
-        
-    df = df.copy()
-    df["Log_Return"] = np.log(df["Prezzo"] / df["Prezzo"].shift(1))
-    df["Var_Perc"] = df["Prezzo"].pct_change() * 100
-    df["Volatilità_Rolling"] = df["Log_Return"].rolling(window).std() * np.sqrt(252)
-    return df
-
-# ---------------------------------------------------------------------------
-# 4. Interfaccia Utente
+# 3. Interfaccia Utente
 # ---------------------------------------------------------------------------
 def main():
-    st.set_page_config(page_title="Listini ISMEA Automatizzati", layout="wide")
-    st.title("Analisi Listini ISMEA")
+    st.set_page_config(page_title="ISMEA Web Scraper", layout="wide")
+    st.title("Estrattore Prezzi ISMEA (Scraping Diretto)")
     
     with st.sidebar:
-        st.header("Selettore Mercato")
-        
-        # La UI non mostra più URL, ma solo i nomi logici dei prodotti
+        st.header("Selettore Pagina")
         selected_product = st.selectbox(
-            "Prodotto Agricolo:",
+            "Mercato:",
             options=list(ISMEA_SOURCES.keys())
         )
-        
-        window_size = st.number_input(
-            "Finestra Volatilità Mobile:",
-            min_value=3, max_value=30, value=7
-        )
+        run_fetch = st.button("Estrai Tabella da Sito Web", type="primary")
 
-    # L'estrazione avviene automaticamente al cambio della selectbox
-    with st.spinner(f"Acquisizione dati per {selected_product} in corso..."):
-        raw_data = fetch_automated_data(selected_product)
-        cleaned_data = process_ismea_dataframe(raw_data)
-        processed_data = compute_differentials(cleaned_data, window=window_size)
-    
-    if not processed_data.empty and "Prezzo" in processed_data.columns:
-        st.subheader(f"Dashboard: {selected_product}")
-        
-        current_price = processed_data["Prezzo"].iloc[-1]
-        var_perc = processed_data["Var_Perc"].iloc[-1]
-        volatility = processed_data["Volatilità_Rolling"].iloc[-1] * 100
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Ultimo Prezzo", f"{current_price:.2f} €", f"{var_perc:+.2f}%")
-        col2.metric("Record Elaborati", len(processed_data))
-        col3.metric("Volatilità", f"{volatility:.1f}%" if pd.notna(volatility) else "N/A")
+    if run_fetch:
+        with st.spinner(f"Scraping della pagina {selected_product} in corso..."):
+            raw_data = fetch_html_data(selected_product)
             
-        if "Data" in processed_data.columns:
-            st.line_chart(processed_data.set_index("Data")["Prezzo"])
-            
-        with st.expander("Visualizza Tabella Dati Analitica"):
-            st.dataframe(processed_data.sort_values(by="Data", ascending=False), use_container_width=True)
-    else:
-        st.error("I dati estratti non sono validi o gli URL di configurazione necessitano di aggiornamento.")
+            if not raw_data.empty:
+                st.success("Tabella estratta con successo!")
+                
+                cleaned_data = process_scraped_table(raw_data)
+                
+                # Mostriamo la tabella così come l'ha trovata nella pagina web
+                st.markdown("### Dati Grezzi Estratti (Raw Table)")
+                st.dataframe(cleaned_data, use_container_width=True)
+                
+                st.info(
+                    "💡 **Prossimo passo:** Osserva i nomi delle colonne nella tabella qui sopra. "
+                    "Ora che riusciamo a prelevare i dati reali, dovrai identificare quali colonne "
+                    "contengono la **Data** e il **Prezzo**, e mapparle all'interno di `process_scraped_table` "
+                    "per poter agganciare il motore di calcolo differenziale."
+                )
+                
+            else:
+                st.error("Impossibile estrarre tabelle valide da questo URL.")
 
 if __name__ == "__main__":
     main()
