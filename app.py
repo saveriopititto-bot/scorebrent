@@ -91,17 +91,13 @@ def main():
     st.set_page_config(page_title="ISMEA Web Scraper", layout="wide")
     st.title("Estrattore Prezzi ISMEA (Scraping Diretto)")
     
+    # Il menu di selezione della pagina/mercato è nascosto: si usa sempre l'unica fonte configurata.
+    selected_market = next(iter(ISMEA_SOURCES.keys()))
+
     with st.sidebar:
-        st.header("1. Selettore Pagina")
-        selected_market = st.selectbox(
-            "Mercato:",
-            options=list(ISMEA_SOURCES.keys())
-        )
-        
-        st.markdown("---")
-        st.header("2. Filtro Prodotto")
-        # Il selettore del cereale verrà popolato dinamicamente una volta scaricati i dati
-        cereal_placeholder = st.empty() 
+        st.header("Scegli il bene")
+        # Il selettore del bene verrà popolato dinamicamente una volta scaricati i dati
+        cereal_placeholder = st.empty()
 
     # L'estrazione avviene automaticamente. @st.cache_data impedisce
     # al server di fare continue richieste HTTP a ogni interazione.
@@ -114,27 +110,27 @@ def main():
             # La prima colonna solitamente contiene il nome del prodotto agricolo
             product_col = cleaned_data.columns[0]
             
-            # Ricaviamo i cereali unici (escludendo eventuali stringhe 'nan' o 'None')
-            lista_cereali = [x for x in cleaned_data[product_col].unique() if x not in ('nan', 'None')]
-            
-            opzioni_filtro = ["Tutti i prodotti"] + lista_cereali
-            
+            # Ricaviamo i beni unici (escludendo eventuali stringhe 'nan' o 'None')
+            lista_beni = [x for x in cleaned_data[product_col].unique() if x not in ('nan', 'None')]
+
+            opzioni_filtro = ["Tutti i prodotti"] + lista_beni
+
             # Popoliamo il menu a tendina nello spazio vuoto della sidebar (cereal_placeholder)
-            selected_cereal = cereal_placeholder.selectbox(
-                "Seleziona Prodotto specifico:", 
+            selected_bene = cereal_placeholder.selectbox(
+                "Seleziona un bene specifico:",
                 options=opzioni_filtro
             )
-            
+
             # Applichiamo il filtro sul DataFrame in base alla scelta
-            if selected_cereal != "Tutti i prodotti":
-                filtered_data = cleaned_data[cleaned_data[product_col] == selected_cereal]
+            if selected_bene != "Tutti i prodotti":
+                filtered_data = cleaned_data[cleaned_data[product_col] == selected_bene]
             else:
                 filtered_data = cleaned_data
-            
+
             # Mostriamo i risultati
             st.success(f"Dati estratti con successo! Righe visualizzate: {len(filtered_data)}")
-            
-            st.markdown(f"### Tabella Prezzi: {selected_cereal}")
+
+            st.markdown(f"### Tabella Prezzi: {selected_bene}")
             st.dataframe(filtered_data, use_container_width=True)
             
         else:
