@@ -1,0 +1,3 @@
+[client]
+# Nasconde il pulsante "Deploy" e le voci per sviluppatori dal menu in alto a destra.
+toolbarMode = "minimal"
