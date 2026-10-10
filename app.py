@@ -12,8 +12,17 @@ import streamlit as st
 import brent_math as bm
 import dati
 
-st.set_page_config(page_title="Prezzo del petrolio", page_icon="🛢️", layout="wide")
-st.title("🛢️ Prezzo del petrolio (Brent)")
+# Con ?pagina=score l'app mostra solo la scheda «Score rifornimento», senza titolo né barra laterale: è la
+# versione incorporata in FuelMode (scheda «Petrolio»). Le impostazioni restano quelle predefinite.
+SOLO_SCORE = st.query_params.get("pagina") == "score"
+
+st.set_page_config(page_title="Prezzo del petrolio", page_icon="🛢️", layout="wide",
+                   initial_sidebar_state="collapsed" if SOLO_SCORE else "auto")
+if SOLO_SCORE:
+    st.markdown("<style>[data-testid='stSidebar'], [data-testid='stSidebarCollapsedControl'], "
+                "[data-testid='stExpandSidebarButton'] {display: none;}</style>", unsafe_allow_html=True)
+else:
+    st.title("🛢️ Prezzo del petrolio (Brent)")
 
 
 # Nomi comprensibili per le previsioni dell'oscillazione (chiavi di bm.INSIEMI_OSC più i riferimenti).
@@ -215,6 +224,8 @@ d_clip = max(-0.10, min(0.10, d_eur))
 
 # Temperatura rispetto al normale stagionale (°C); None se disattivata o non disponibile.
 anomalia, errore_meteo = None, None
+if SOLO_SCORE:  # meteo e rischio geopolitico non servono allo score
+    usa_meteo = usa_gpr = False
 if usa_meteo:
     try:
         anomalia = bm.anomalia_stagionale(scarica_meteo(base.index[0], t))
@@ -245,24 +256,29 @@ if usa_gpr:
     except Exception as e:
         errore_gpr = str(e)
 
-tab1, tab_score, tab_prev, tab_pompa, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
-    ["Prezzo", "Score rifornimento", "Prossimi 5 giorni", "Pompa (Italia)", "Andamento", "Meteo", "Geopolitica", "Prova di previsione", "Oscillazione attesa"])
+if SOLO_SCORE:
+    tab_score = st.container()
+else:
+    tab1, tab_score, tab_prev, tab_pompa, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
+        ["Prezzo", "Score rifornimento", "Prossimi 5 giorni", "Pompa (Italia)", "Andamento", "Meteo", "Geopolitica",
+         "Prova di previsione", "Oscillazione attesa"])
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
 # --------------------------------------------------------------------------
-with tab1:
-    st.caption(f"Ultimo prezzo di chiusura: {t:%d/%m/%Y} · confrontato con il {data_prima:%d/%m/%Y}")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Brent in dollari", f"{ora['usd']:.2f} $ al barile", f"{d_usd:+.2%}")
-    c2.metric("Brent in euro", f"{ora['eur']:.2f} € al barile", f"{d_eur:+.2%}")
-    c3.metric("Variazione in euro, limitata a ±10%", f"{d_clip:+.2%}",
-              help="La stessa variazione del prezzo in euro, ma tagliata a ±10% "
-                   "per non dare troppo peso ai salti eccezionali.")
-    dati_grafico = base.loc[base.index >= t - pd.Timedelta(days=giorni_grafico), ["usd", "eur"]]
-    grafico(dati_grafico.rename(columns={"usd": "Dollari al barile", "eur": "Euro al barile"}), "Prezzo al barile")
-    st.caption("Fonte: Yahoo Finance. I prezzi possono arrivare in ritardo e non sono un consiglio di investimento. "
-               "Un barile sono 159 litri di petrolio greggio.")
+if not SOLO_SCORE:
+    with tab1:
+        st.caption(f"Ultimo prezzo di chiusura: {t:%d/%m/%Y} · confrontato con il {data_prima:%d/%m/%Y}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Brent in dollari", f"{ora['usd']:.2f} $ al barile", f"{d_usd:+.2%}")
+        c2.metric("Brent in euro", f"{ora['eur']:.2f} € al barile", f"{d_eur:+.2%}")
+        c3.metric("Variazione in euro, limitata a ±10%", f"{d_clip:+.2%}",
+                  help="La stessa variazione del prezzo in euro, ma tagliata a ±10% "
+                       "per non dare troppo peso ai salti eccezionali.")
+        dati_grafico = base.loc[base.index >= t - pd.Timedelta(days=giorni_grafico), ["usd", "eur"]]
+        grafico(dati_grafico.rename(columns={"usd": "Dollari al barile", "eur": "Euro al barile"}), "Prezzo al barile")
+        st.caption("Fonte: Yahoo Finance. I prezzi possono arrivare in ritardo e non sono un consiglio di investimento. "
+                   "Un barile sono 159 litri di petrolio greggio.")
 
 # --------------------------------------------------------------------------
 # Serie nei periodi scelti
@@ -428,6 +444,9 @@ with tab_score:
                 "score (+1 = fare il pieno subito invece che dopo 1 o 2 settimane, −1 = aspettare) quanto si è "
                 "risparmiato in media, e quante volte. Un valore positivo vuol dire che lo score ha fatto risparmiare."
             )
+
+if SOLO_SCORE:  # versione incorporata: le altre schede non servono
+    st.stop()
 
 with tab_pompa:
     st.subheader("Prezzi medi alla pompa in Italia")
