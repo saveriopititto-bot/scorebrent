@@ -1,6 +1,6 @@
 # Prezzo del petrolio (Brent)
 
-App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
+App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici. L'aspetto è lo stesso di [FuelMode](https://fuelmode.streamlit.app/): palette blu petrolio e arancione, font Archivo, barra laterale e contenuto in schede bianche arrotondate, schede come barra di navigazione con il nome dell'app.
 
 ## Da dove partire
 
@@ -241,6 +241,7 @@ Opzioni: `--giorni N` (0 = tutto lo storico), `--alpha` e `--theta` (default 1).
 | File | Contenuto |
 |---|---|
 | `app.py` | L'interfaccia: download di prezzi, OVX, GPR, temperature e prezzi alla pompa, schede, grafici e testi. |
+| `style.py` | Lo stile di FuelMode: CSS globale e colori della palette, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
 | `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione, score di rifornimento (`score_storico`), ritardo della pompa e prova a finestre scorrevoli. Non dipende da Streamlit. |
 | `dati.py` | Download da Yahoo Finance (Brent, cambio, OVX) e preparazione dei prezzi, senza Streamlit: lo usano sia l'app sia lo script di esportazione. |
 | `esporta_score.py` | Calcola lo score e lo scrive nella tabella `brent_score` di Supabase. |
@@ -248,7 +249,7 @@ Opzioni: `--giorni N` (0 = tutto lo storico), `--alpha` e `--theta` (default 1).
 | `.github/workflows/esporta-score.yml` | Esegue l'esportazione ogni giorno di borsa e su richiesta. |
 | `requirements.txt` | Le librerie Python dell'app. |
 | `requirements-export.txt` | Le librerie che servono solo allo script di esportazione (senza Streamlit). |
-| `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
+| `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy» e imposta il tema di FuelMode (colori, font e colori dei grafici). |
 
 ## Dati e avvertenze
 

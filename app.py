@@ -11,6 +11,7 @@ import streamlit as st
 
 import brent_math as bm
 import dati
+import style
 
 # Con ?pagina=score l'app mostra solo la scheda «Score rifornimento», senza titolo né barra laterale: è la
 # versione incorporata in FuelMode (scheda «Petrolio»). Le impostazioni restano quelle predefinite.
@@ -18,11 +19,10 @@ SOLO_SCORE = st.query_params.get("pagina") == "score"
 
 st.set_page_config(page_title="Prezzo del petrolio", page_icon="🛢️", layout="wide",
                    initial_sidebar_state="collapsed" if SOLO_SCORE else "auto")
+style.apply_style()  # stile di FuelMode; il titolo dell'app è nella barra delle schede
 if SOLO_SCORE:
     st.markdown("<style>[data-testid='stSidebar'], [data-testid='stSidebarCollapsedControl'], "
                 "[data-testid='stExpandSidebarButton'] {display: none;}</style>", unsafe_allow_html=True)
-else:
-    st.title("🛢️ Prezzo del petrolio (Brent)")
 
 
 # Nomi comprensibili per le previsioni dell'oscillazione (chiavi di bm.INSIEMI_OSC più i riferimenti).
@@ -257,7 +257,7 @@ if usa_gpr:
         errore_gpr = str(e)
 
 if SOLO_SCORE:
-    tab_score = st.container()
+    tab_score = st.container(key="card-score")  # scheda bianca, come nella versione con le schede
 else:
     tab1, tab_score, tab_prev, tab_pompa, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
         ["Prezzo", "Score rifornimento", "Prossimi 5 giorni", "Pompa (Italia)", "Andamento", "Meteo", "Geopolitica",
@@ -376,11 +376,11 @@ with tab_score:
                 x=asse, y=alt.Y("S:Q", title="Score S"),
                 color=alt.Color("Esito:N", title=None, legend=alt.Legend(orient="bottom"),
                                 scale=alt.Scale(domain=["+1 rifornisci", "0 neutro", "−1 aspetta"],
-                                                range=["#2e7d32", "#9e9e9e", "#c62828"])),
+                                                range=[style.VERDE, style.ORANGE, style.ROSSO])),
                 tooltip=[alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y"), alt.Tooltip("S:Q", format="+.2f"),
                          alt.Tooltip("Esito:N")])
-            linea = alt.Chart(d_s).mark_line(color="#bdbdbd", strokeWidth=1).encode(x=asse, y="S:Q")
-            soglie = alt.Chart(pd.DataFrame({"y": [theta_s, -theta_s]})).mark_rule(strokeDash=[4, 4], color="#757575"
+            linea = alt.Chart(d_s).mark_line(color=style.N400, strokeWidth=1).encode(x=asse, y="S:Q")
+            soglie = alt.Chart(pd.DataFrame({"y": [theta_s, -theta_s]})).mark_rule(strokeDash=[4, 4], color=style.N500
                                                                                  ).encode(y="y:Q")
             st.altair_chart(linea + punti + soglie, width="stretch")
             st.caption("Lo score negli ultimi mesi; le linee tratteggiate sono le soglie ±θ.")
@@ -522,7 +522,7 @@ with tab_prev:
             fut[["Data", "Centro"]].rename(columns={"Centro": "Valore"}).assign(Serie="Previsione"),
         ])
         asse_x = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y"))
-        fascia = lambda nome, opacita: alt.Chart(fut).mark_area(opacity=opacita, color="#1f77b4").encode(
+        fascia = lambda nome, opacita: alt.Chart(fut).mark_area(opacity=opacita, color=style.BLUE_GREEN).encode(
             x=asse_x, y=alt.Y(f"min{nome}:Q"), y2=f"max{nome}:Q",
             tooltip=[alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y"),
                      alt.Tooltip(f"min{nome}:Q", title="Da", format=".2f"),
@@ -531,7 +531,7 @@ with tab_prev:
             x=asse_x,
             y=alt.Y("Valore:Q", title=f"{simbolo} al barile", scale=alt.Scale(zero=False)),
             color=alt.Color("Serie:N", title=None, legend=alt.Legend(orient="bottom"),
-                            scale=alt.Scale(domain=["Prezzo vero", "Previsione"], range=["#1f4e79", "#1f77b4"])),
+                            scale=alt.Scale(domain=["Prezzo vero", "Previsione"], range=[style.DEEP, style.BLUE_GREEN])),
             strokeDash=alt.StrokeDash("Serie:N", legend=None,
                                       scale=alt.Scale(domain=["Prezzo vero", "Previsione"], range=[[1, 0], [6, 4]])),
             tooltip=[alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y"), alt.Tooltip("Serie:N", title="Serie"),
@@ -569,7 +569,7 @@ with tab2:
     st.caption("Ogni barra è la variazione percentuale del prezzo in euro rispetto al periodo prima. "
                "Verde = salita, rosso = discesa.")
     grafico(pd.DataFrame({"Salita": np.clip(h, 0, None), "Discesa": np.clip(h, None, 0)}, index=idx),
-            "Variazione (%)", barre=True, colori=["#2e7d32", "#c62828"])
+            "Variazione (%)", barre=True, colori=[style.VERDE, style.ROSSO])
 
     cA, cB = st.columns([1, 1])
     with cA:
