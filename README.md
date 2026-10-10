@@ -49,7 +49,7 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 | Ampiezza della finestra mobile | Quanti periodi si guardano insieme per calcolare sigma, MAD, «chi anticipa chi» e la temperatura media | Andamento, Prova di previsione, Oscillazione attesa |
 | Quanto avanti prevedere | L'orizzonte della previsione | Prova di previsione, Oscillazione attesa |
 | Rialzo minimo da prevedere | 0% = basta che il prezzo salga; 2% = deve salire di più del 2% | Prova di previsione |
-| Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
+| Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
 | Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
 | Usa il rischio geopolitico (GPR) | Scarica il GPR e lo aggiunge alle previsioni | Geopolitica, Prova di previsione, Oscillazione attesa |
 | Mostra in (dentro la scheda) | Euro o dollari | Prossimi 5 giorni |
@@ -68,10 +68,17 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 - La fascia più scura contiene il prezzo in circa 2 casi su 3, quella più chiara in circa 19 su 20, se il prezzo si comporta come nel passato. Nei giorni di notizie improvvise può uscirne più spesso.
 - Le date sono i giorni lavorativi successivi: non tengono conto delle festività di borsa.
 
+**Meteo e Geopolitica**
+
+- Sono dati di contesto: mostrano se fa più freddo o più caldo del solito in Europa e se il mondo è più teso del normale. Il grafico del prezzo sotto serve per confrontarli a occhio.
+- Che contino davvero per il Brent lo dicono le prove: nella «Prova di previsione» e nell'«Oscillazione attesa» si confrontano i gruppi con e senza temperatura o GPR. Se il gruppo con il dato in più non fa meglio, quel dato non aiuta a prevedere.
+- Per il GPR, un valore sopra 100 vuol dire più articoli del solito su guerre e tensioni. Le *minacce* misurano la paura di un conflitto, gli *atti* i conflitti in corso. Gli eventi in tabella sono le etichette degli autori, in inglese.
+
 **Oscillazione attesa** (quanto si muoverà il prezzo?)
 
 - *Oscillazione attesa*: movimento tipico previsto per ogni giorno o settimana. Se è sopra il normale, il mercato è più agitato del solito.
 - *Movimento probabile*: in circa 2 casi su 3 la variazione complessiva resta dentro questo intervallo.
+- La previsione in alto e le fasce di «Prossimi 5 giorni» usano il modello «+ agitazione e OVX» (o «+ agitazione» se l'OVX non c'è), anche se nella prova un altro modello fa meglio. Temperatura e GPR entrano solo nella prova.
 - Nella prova, *bias* vicino a zero vuol dire che il modello non sovrastima né sottostima. *MAD* e *sigma* più bassi vogliono dire errori più piccoli e più costanti. *Miglioramento* e *anni in cui fa meglio* sono misurati contro «come nel periodo appena passato». Il riferimento «OVX così com'è» dice quanto vale da sola l'opinione del mercato: se un modello lo batte, aggiunge qualcosa a ciò che il mercato già sa.
 
 ## Metodo in breve
