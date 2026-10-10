@@ -4,9 +4,14 @@ App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent d
 
 ## Cosa mostra
 
-L'app ha cinque schede.
+L'app ha sei schede.
 
 - **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
+- **Prossimi 5 giorni**: grafico con il prezzo delle ultime settimane e, tratteggiata, la previsione per i prossimi 5 giorni di borsa, in euro o in dollari.
+  - La linea tratteggiata resta al prezzo di oggi, perché la direzione del Brent non si può prevedere dal passato.
+  - Attorno ci sono due fasce: dove il prezzo dovrebbe trovarsi in circa 2 casi su 3 e in circa 19 casi su 20. Si allargano giorno dopo giorno.
+  - L'ampiezza delle fasce viene dalla previsione dell'oscillazione (modello «+ agitazione e OVX», giorno per giorno, finestra di 20 giorni) e non dipende da «Raggruppa i prezzi».
+  - Una tabella riporta gli stessi valori giorno per giorno.
 - **Andamento**: di quanto il prezzo è salito o sceso in ogni giorno o settimana, con un riepilogo:
   - movimento complessivo, variazione tipica, salita e discesa più grandi;
   - quanto è stato lineare l'andamento;
@@ -33,6 +38,7 @@ Sono tutte nella barra laterale.
 | Impostazione | Cosa fa | Schede |
 |---|---|---|
 | Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
+| Mostra in (dentro la scheda) | Euro o dollari | Prossimi 5 giorni |
 | Periodo mostrato nel grafico | Da 1 mese a tutto lo storico | Prezzo, Meteo |
 | Aggiorna i prezzi | Riscarica prezzi e temperature invece di usare quelli in memoria | Tutte |
 | Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |
@@ -40,8 +46,8 @@ Sono tutte nella barra laterale.
 | Ampiezza della finestra mobile | Quanti periodi si guardano insieme per calcolare sigma, MAD, «chi anticipa chi» e la temperatura media | Andamento, Prova di previsione, Oscillazione attesa |
 | Quanto avanti prevedere | L'orizzonte della previsione | Prova di previsione, Oscillazione attesa |
 | Rialzo minimo da prevedere | 0% = basta che il prezzo salga; 2% = deve salire di più del 2% | Prova di previsione |
-| Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
-| Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa |
+| Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
+| Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
 
 ## Come leggere i risultati
 
@@ -51,6 +57,11 @@ Sono tutte nella barra laterale.
 - *Capacità di distinguere*: 0.5 è come tirare a indovinare, 1 è perfetto. Sotto la tabella c'è il margine dentro cui può variare per puro caso.
 - *Anni in cui fa meglio*: un modello utile vince nella maggior parte degli anni, non solo in media.
 - Con rialzo minimo 0% è normale che nessun gruppo batta il riferimento: la direzione del prezzo dal solo passato è quasi imprevedibile. Con una soglia sopra lo 0% contano di più sigma e MAD.
+
+**Prossimi 5 giorni**
+
+- La fascia più scura contiene il prezzo in circa 2 casi su 3, quella più chiara in circa 19 su 20, se il prezzo si comporta come nel passato. Nei giorni di notizie improvvise può uscirne più spesso.
+- Le date sono i giorni lavorativi successivi: non tengono conto delle festività di borsa.
 
 **Oscillazione attesa** (quanto si muoverà il prezzo?)
 
@@ -63,6 +74,7 @@ Sono tutte nella barra laterale.
 - **Prova a finestre scorrevoli**: entrambe le prove imparano sul primo 40% dello storico. Poi, ogni 21 giorni (o 4 settimane), si riaddestrano su tutto il passato e prevedono il blocco successivo. Dal periodo di studio si escludono i casi il cui esito non era ancora noto all'inizio del blocco, così il modello non vede mai il futuro.
 - **Previsione del rialzo**: regressione logistica con penalità ridge sui dati della finestra mobile, cioè variazione di prezzo e agitazione, legame fra i due, area di Lévy, sigma, MAD, temperatura e OVX.
 - **Previsione dell'oscillazione**: regressione ridge sul logaritmo dell'oscillazione dei prossimi periodi, con una correzione per non sottostimarla tornando dalla scala logaritmica. La previsione mostrata in alto nella scheda usa il modello «+ agitazione e OVX», oppure «+ agitazione» se l'OVX non è disponibile.
+- **Fasce dei prossimi 5 giorni**: con oscillazione attesa σ al giorno, dopo k giorni la fascia va da P·e^(−zσ√k) a P·e^(zσ√k), con z = 1 (2 casi su 3) e z = 1.96 (19 su 20). In dollari si usa la stessa ampiezza in percentuale.
 - **OVX**: è una volatilità annua in %. Per confrontarlo con l'oscillazione per periodo si divide per √252 (giorni) o √52 (settimane).
 - **Temperatura rispetto al normale**: il normale è la media dello stesso giorno dell'anno su tutti gli anni disponibili, smussata su 31 giorni.
 

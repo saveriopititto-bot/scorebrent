@@ -190,7 +190,8 @@ if usa_ovx:
     except Exception as e:
         errore_ovx = str(e)
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Prezzo", "Andamento", "Meteo", "Prova di previsione", "Oscillazione attesa"])
+tab1, tab_prev, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Prezzo", "Prossimi 5 giorni", "Andamento", "Meteo", "Prova di previsione", "Oscillazione attesa"])
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
@@ -211,19 +212,100 @@ with tab1:
 # --------------------------------------------------------------------------
 # Serie nei periodi scelti
 # --------------------------------------------------------------------------
-bins = aggrega(base, freq)
-x = np.log(bins["eur"].to_numpy())                                   # livello: ln prezzo in euro
-y = np.log1p(100 * (bins["high"] / bins["low"] - 1)).to_numpy()      # agitazione: ln(1 + escursione % fra massimo e minimo)
-m = None                                                             # meteo: anomalia di temperatura nei periodi
-if anomalia is not None:
-    m_bin = anomalia if freq == "Giorno per giorno" else anomalia.resample("W-FRI").mean()
-    m = m_bin.reindex(bins.index).to_numpy()
-o = None                                                             # OVX: ln volatilità attesa per periodo
-if ovx_serie is not None:
-    periodi_anno = 252 if freq == "Giorno per giorno" else 52
-    o_bin = ovx_serie.reindex(base.index, method="ffill", limit=5)
-    o_bin = o_bin if freq == "Giorno per giorno" else o_bin.resample("W-FRI").last()
-    o = np.log(o_bin.reindex(bins.index).to_numpy() / 100 / np.sqrt(periodi_anno))
+def serie(freq: str):
+    """Prezzi raggruppati per `freq` e serie allineate: x = ln prezzo in euro, y = agitazione
+    (ln(1 + escursione % fra massimo e minimo)), m = temperatura rispetto al normale,
+    o = ln volatilità attesa per periodo dall'OVX (m e o None se non disponibili)."""
+    bins = aggrega(base, freq)
+    x = np.log(bins["eur"].to_numpy())
+    y = np.log1p(100 * (bins["high"] / bins["low"] - 1)).to_numpy()
+    m = None
+    if anomalia is not None:
+        m_bin = anomalia if freq == "Giorno per giorno" else anomalia.resample("W-FRI").mean()
+        m = m_bin.reindex(bins.index).to_numpy()
+    o = None
+    if ovx_serie is not None:
+        o_bin = ovx_serie.reindex(base.index, method="ffill", limit=5)
+        o_bin = o_bin if freq == "Giorno per giorno" else o_bin.resample("W-FRI").last()
+        o = np.log(o_bin.reindex(bins.index).to_numpy() / 100 / np.sqrt(252 if freq == "Giorno per giorno" else 52))
+    return bins, x, y, m, o
+
+
+bins, x, y, m, o = serie(freq)
+periodi_anno = 252 if freq == "Giorno per giorno" else 52
+
+# --------------------------------------------------------------------------
+# Scheda «Prossimi 5 giorni» - sempre giorno per giorno, indipendente da «Raggruppa i prezzi»
+# --------------------------------------------------------------------------
+GIORNI_PREV, FINESTRA_PREV = 5, 20
+with tab_prev:
+    st.subheader(f"Il prezzo nei prossimi {GIORNI_PREV} giorni di borsa")
+    valuta = st.radio("Mostra in", ["Euro", "Dollari"], horizontal=True, key="valuta_prev")
+    col_p, simbolo = ("eur", "€") if valuta == "Euro" else ("usd", "$")
+    _, x_g, y_g, m_g, o_g = serie("Giorno per giorno")
+    try:
+        feat_g = bm.costruisci_features_oscillazione(x_g, y_g, FINESTRA_PREV, GIORNI_PREV, meteo=m_g, ovx=o_g)
+        modello_g = "+ agitazione e OVX" if o_g is not None else "+ agitazione"
+        sig = bm.prevedi_oscillazione(feat_g, bm.INSIEMI_OSC[modello_g])  # oscillazione attesa al giorno (frazione)
+    except Exception as e:
+        st.error(f"Non riesco a calcolare la previsione: {e}")
+    else:
+        p0 = float(ora[col_p])
+        k = np.arange(GIORNI_PREV + 1)                                   # 0 = oggi, poi i giorni di borsa successivi
+        date_f = pd.DatetimeIndex([t]).append(pd.bdate_range(t + pd.Timedelta(days=1), periods=GIORNI_PREV))
+        fut = pd.DataFrame({"Data": date_f, "Centro": p0})
+        for nome, z in (("68", 1.0), ("95", 1.96)):
+            fut[f"min{nome}"] = p0 * np.exp(-z * sig * np.sqrt(k))
+            fut[f"max{nome}"] = p0 * np.exp(z * sig * np.sqrt(k))
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Prezzo al {t:%d/%m/%Y}", f"{p0:.2f} {simbolo} al barile")
+        c2.metric("Oscillazione attesa", f"{100 * sig:.2f}% al giorno",
+                  help=f"Dal modello «{NOMI_OSC[modello_g].removeprefix('Modello: ')}» della scheda «Oscillazione "
+                       f"attesa», calcolato giorno per giorno sugli ultimi {FINESTRA_PREV} giorni.")
+        ultimo = fut.iloc[-1]
+        c3.metric(f"Il {ultimo['Data']:%d/%m}, in 2 casi su 3", f"{ultimo['min68']:.2f} – {ultimo['max68']:.2f} {simbolo}",
+                  help="Intervallo in cui il prezzo dovrebbe trovarsi in circa 2 casi su 3 alla fine dei 5 giorni.")
+
+        storico = base.loc[base.index >= t - pd.Timedelta(days=42), [col_p]].rename(columns={col_p: "Valore"})
+        linee = pd.concat([
+            storico.rename_axis("Data").reset_index().assign(Serie="Prezzo vero"),
+            fut[["Data", "Centro"]].rename(columns={"Centro": "Valore"}).assign(Serie="Previsione"),
+        ])
+        asse_x = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y"))
+        fascia = lambda nome, opacita: alt.Chart(fut).mark_area(opacity=opacita, color="#1f77b4").encode(
+            x=asse_x, y=alt.Y(f"min{nome}:Q"), y2=f"max{nome}:Q",
+            tooltip=[alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y"),
+                     alt.Tooltip(f"min{nome}:Q", title="Da", format=".2f"),
+                     alt.Tooltip(f"max{nome}:Q", title="A", format=".2f")])
+        serie_l = alt.Chart(linee).mark_line().encode(
+            x=asse_x,
+            y=alt.Y("Valore:Q", title=f"{simbolo} al barile", scale=alt.Scale(zero=False)),
+            color=alt.Color("Serie:N", title=None, legend=alt.Legend(orient="bottom"),
+                            scale=alt.Scale(domain=["Prezzo vero", "Previsione"], range=["#1f4e79", "#1f77b4"])),
+            strokeDash=alt.StrokeDash("Serie:N", legend=None,
+                                      scale=alt.Scale(domain=["Prezzo vero", "Previsione"], range=[[1, 0], [6, 4]])),
+            tooltip=[alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y"), alt.Tooltip("Serie:N", title="Serie"),
+                     alt.Tooltip("Valore:Q", title=f"{simbolo} al barile", format=".2f")],
+        )
+        st.altair_chart(fascia("95", 0.12) + fascia("68", 0.25) + serie_l, width="stretch")
+
+        tabella = fut.iloc[1:].assign(**{
+            "Giorno": [f"{['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'][d.dayofweek]} {d:%d/%m}"
+                       for d in fut["Data"].iloc[1:]],
+            "Previsione": fut["Centro"].iloc[1:].map(f"{{:.2f}} {simbolo}".format),
+            "2 casi su 3": [f"{a:.2f} – {b:.2f} {simbolo}" for a, b in zip(fut.min68.iloc[1:], fut.max68.iloc[1:])],
+            "19 casi su 20": [f"{a:.2f} – {b:.2f} {simbolo}" for a, b in zip(fut.min95.iloc[1:], fut.max95.iloc[1:])],
+        })[["Giorno", "Previsione", "2 casi su 3", "19 casi su 20"]]
+        st.dataframe(tabella, hide_index=True)
+        st.caption(
+            "**Come leggerla.** La linea tratteggiata è la previsione centrale: resta al prezzo di oggi perché la "
+            "direzione del Brent non si può prevedere dal passato (lo mostra la scheda «Prova di previsione»). Quello "
+            "che si può prevedere è quanto il prezzo si muoverà: la fascia più scura è dove dovrebbe trovarsi in circa "
+            "2 casi su 3, quella più chiara in circa 19 casi su 20. La fascia si allarga perché più si guarda avanti, "
+            "più il prezzo ha tempo per allontanarsi. Non tiene conto delle festività di borsa e non è un consiglio "
+            "di investimento."
+        )
 
 # --------------------------------------------------------------------------
 # Scheda 2 - Andamento
