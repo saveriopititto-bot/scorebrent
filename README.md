@@ -1,6 +1,6 @@
 # Prezzo del petrolio (Brent)
 
-App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX e il rischio geopolitico (GPR), per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
+App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX e il rischio geopolitico (GPR), per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
 
 ## Cosa mostra
 
@@ -75,6 +75,8 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 
 - Lo score continuo S misura di quante «oscillazioni tipiche in 5 giorni» il Brent è lontano dalla media dei 30 giorni. Diventa +1 sopra θ e −1 sotto −θ; con θ = 1 lo scarto deve superare un movimento normale di 5 giorni.
 - La *stabilità* vale 1 con mercato calmo. Quando l'oscillazione attesa supera quella normale scende verso 0 e avvicina lo score a «neutro».
+- Per regolarlo: se nella tabella storica +1 e −1 si comportano quasi come «Tutti i giorni», alza θ. I segnali diventano più rari ma più netti. Abbassa α se vuoi che lo score resti attivo anche nei periodi agitati.
+- Lo score riguarda il Brent: la scelta del distributore dipende anche dai prezzi locali, che l'app non conosce.
 - Nella tabella storica, il segnale è coerente se dopo un +1 il Brent è salito più spesso della media di tutti i giorni e dopo un −1 meno spesso. La tabella guarda solo il Brent: i prezzi alla pompa non sono fra i dati dell'app, quindi non dice quanto si risparmia davvero.
 
 **Prossimi 5 giorni**
@@ -132,7 +134,7 @@ Dopo un aggiornamento che cambia sia `app.py` sia `brent_math.py`, Streamlit pu�
 | File | Contenuto |
 |---|---|
 | `app.py` | L'interfaccia: download di prezzi, OVX, GPR e temperature, schede, grafici e testi. |
-| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione e prova a finestre scorrevoli. Non dipende da Streamlit. |
+| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione, score di rifornimento e prova a finestre scorrevoli. Non dipende da Streamlit. |
 | `requirements.txt` | Le librerie Python necessarie. |
 | `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
 
