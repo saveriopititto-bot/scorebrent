@@ -1,6 +1,6 @@
 # Prezzo del petrolio (Brent)
 
-App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), per capire se il caldo o il freddo aiutano a prevedere il prezzo. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
+App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), e l'indice di volatilità del petrolio OVX, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
 
 ## Cosa mostra
 
@@ -19,10 +19,11 @@ L'app ha cinque schede.
   - La prova procede a finestre scorrevoli su tutto lo storico. Il primo 40% serve solo per imparare; poi, ogni mese circa, il modello si riaddestra su tutto il passato e prevede il mese successivo.
   - Il risultato è confrontato con una stima di riferimento che non guarda il passato recente. Per ogni gruppo di dati si vede anche in quanti anni fa meglio del riferimento.
   - Fra i dati usati per prevedere c'è l'oscillazione recente del prezzo: *sigma* (deviazione standard) e *MAD* (deviazione assoluta mediana, meno sensibile ai salti isolati). Contano soprattutto quando si chiede un rialzo minimo sopra lo 0%.
-  - Se la temperatura è attiva, la prova include anche due gruppi di dati con la temperatura rispetto al normale.
+  - Se la temperatura o l'OVX sono attivi, la prova include anche un gruppo di dati con ciascuno di essi. «Tutti i dati disponibili» li comprende tutti.
 - **Oscillazione attesa**: quanto si muoverà il prezzo nei prossimi giorni o settimane, in % e in euro al barile. Prevedere quanto si muove è molto più fattibile che prevedere in che direzione, perché i periodi agitati tendono a durare.
-  - Il modello è una regressione sul logaritmo dell'oscillazione, che usa sigma e MAD recenti (su 5 periodi e sulla finestra mobile) e l'agitazione, cioè la distanza fra massimo e minimo.
-  - La prova a finestre scorrevoli lo confronta con due riferimenti: «come nel periodo appena passato» e «media storica».
+  - Il modello è una regressione sul logaritmo dell'oscillazione. Usa sigma e MAD recenti (su 5 periodi e sulla finestra mobile), l'agitazione (cioè la distanza fra massimo e minimo) e, se attivo, l'OVX.
+  - La scheda mostra anche l'OVX di oggi, tradotto in oscillazione attesa al giorno o alla settimana.
+  - La prova a finestre scorrevoli confronta i modelli con tre riferimenti: «come nel periodo appena passato», «OVX così com'è» e «media storica».
   - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
 
 ## Impostazioni
@@ -40,6 +41,7 @@ Sono tutte nella barra laterale.
 | Quanto avanti prevedere | L'orizzonte della previsione | Prova di previsione, Oscillazione attesa |
 | Rialzo minimo da prevedere | 0% = basta che il prezzo salga; 2% = deve salire di più del 2% | Prova di previsione |
 | Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
+| Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa |
 
 ## Come leggere i risultati
 
@@ -54,13 +56,14 @@ Sono tutte nella barra laterale.
 
 - *Oscillazione attesa*: movimento tipico previsto per ogni giorno o settimana. Se è sopra il normale, il mercato è più agitato del solito.
 - *Movimento probabile*: in circa 2 casi su 3 la variazione complessiva resta dentro questo intervallo.
-- Nella prova, *bias* vicino a zero vuol dire che il modello non sovrastima né sottostima. *MAD* e *sigma* più bassi vogliono dire errori più piccoli e più costanti. *Miglioramento* e *anni in cui fa meglio* sono misurati contro «come nel periodo appena passato», il riferimento più difficile da battere.
+- Nella prova, *bias* vicino a zero vuol dire che il modello non sovrastima né sottostima. *MAD* e *sigma* più bassi vogliono dire errori più piccoli e più costanti. *Miglioramento* e *anni in cui fa meglio* sono misurati contro «come nel periodo appena passato». Il riferimento «OVX così com'è» dice quanto vale da sola l'opinione del mercato: se un modello lo batte, aggiunge qualcosa a ciò che il mercato già sa.
 
 ## Metodo in breve
 
 - **Prova a finestre scorrevoli**: entrambe le prove imparano sul primo 40% dello storico. Poi, ogni 21 giorni (o 4 settimane), si riaddestrano su tutto il passato e prevedono il blocco successivo. Dal periodo di studio si escludono i casi il cui esito non era ancora noto all'inizio del blocco, così il modello non vede mai il futuro.
-- **Previsione del rialzo**: regressione logistica con penalità ridge sui dati della finestra mobile, cioè variazione di prezzo e agitazione, legame fra i due, area di Lévy, sigma, MAD e temperatura.
-- **Previsione dell'oscillazione**: regressione ridge sul logaritmo dell'oscillazione dei prossimi periodi, con una correzione per non sottostimarla tornando dalla scala logaritmica. La previsione mostrata in alto nella scheda usa il modello «+ agitazione».
+- **Previsione del rialzo**: regressione logistica con penalità ridge sui dati della finestra mobile, cioè variazione di prezzo e agitazione, legame fra i due, area di Lévy, sigma, MAD, temperatura e OVX.
+- **Previsione dell'oscillazione**: regressione ridge sul logaritmo dell'oscillazione dei prossimi periodi, con una correzione per non sottostimarla tornando dalla scala logaritmica. La previsione mostrata in alto nella scheda usa il modello «+ agitazione e OVX», oppure «+ agitazione» se l'OVX non è disponibile.
+- **OVX**: è una volatilità annua in %. Per confrontarlo con l'oscillazione per periodo si divide per √252 (giorni) o √52 (settimane).
 - **Temperatura rispetto al normale**: il normale è la media dello stesso giorno dell'anno su tutti gli anni disponibili, smussata su 31 giorni.
 
 ## Avvio
@@ -89,6 +92,7 @@ L'app si apre nel browser all'indirizzo http://localhost:8501. Deve poter raggiu
 ## Dati e avvertenze
 
 - **Fonti**: contratto future sul Brent `BZ=F` (dollari al barile) e cambio `EURUSD=X`, scaricati con [yfinance](https://github.com/ranaroussi/yfinance) per tutto lo storico disponibile e aggiornati al massimo ogni 15 minuti.
+- **OVX**: CBOE Crude Oil Volatility Index (`^OVX` su Yahoo Finance), disponibile dal 2007. È la volatilità a 30 giorni attesa dalle opzioni sul petrolio WTI americano, che si muove quasi insieme al Brent. Se non si scarica, l'app continua senza.
 - **Meteo**: temperatura media giornaliera da [Open-Meteo.com](https://open-meteo.com), licenza CC BY 4.0, aggiornata al massimo ogni 6 ore. Lo storico arriva con qualche giorno di ritardo: gli ultimi giorni vengono dalle previsioni. L'API gratuita di Open-Meteo è per uso non commerciale e ha limiti di richieste. Se la scheda Meteo mostra un avviso, l'app continua senza temperatura.
 - **Salti fra contratti**: `BZ=F` è un contratto con scadenza mensile. Il passaggio da un contratto al successivo produce piccoli salti che non sono veri movimenti del mercato.
 - **Previsioni**: i periodi vicini si sovrappongono, quindi i casi davvero indipendenti nella prova di previsione sono meno di quanti sembrano.

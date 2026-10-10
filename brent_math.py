@@ -14,6 +14,8 @@ Corrispondenze con il paper
 |                                        | `orizzonte` bin                            |
 | (nessuno)                              | m_k = temperatura in Europa rispetto al    |
 |                                        | normale stagionale (Open-Meteo), opzionale |
+| (nessuno)                              | o_k = volatilita' attesa dal mercato delle |
+|                                        | opzioni sul petrolio (OVX), opzionale      |
 
 Convenzione di segno dell'area di Lévy (eq. 6 del paper), con cammino
 (x, y) = (prezzo, attivita'): A > 0 se il cammino ruota in senso antiorario,
@@ -111,18 +113,31 @@ def anomalia_stagionale(temp: pd.Series, smussamento: int = 31) -> pd.Series:
 # --------------------------------------------------------------------------
 # Validazione fuori campione (§3.6 del paper)
 # --------------------------------------------------------------------------
+# None = tutti i predittori presenti nella tabella (vedi _risolvi).
 INSIEMI = {
     "Livello 1 (dx, dy)": ["dx", "dy"],
     "+ coseno": ["dx", "dy", "cos"],
     "+ area di Lévy": ["dx", "dy", "levy"],
     "+ oscillazione": ["dx", "dy", "sigma", "mad"],
-    "Tutto": ["dx", "dy", "cos", "levy", "sigma", "mad"],
     "+ meteo": ["dx", "dy", "meteo"],
-    "Tutto + meteo": ["dx", "dy", "cos", "levy", "sigma", "mad", "meteo"],
+    "+ OVX": ["dx", "dy", "ovx"],
+    "Tutto": None,
 }
+PREDITTORI = ["dx", "dy", "cos", "levy", "sigma", "mad", "meteo", "ovx"]
 
 
-def costruisci_features(x, y, w: int, orizzonte: int, meteo=None) -> pd.DataFrame:
+def _risolvi(insiemi: dict, predittori: list[str], f: pd.DataFrame) -> dict:
+    """Insiemi utilizzabili con le colonne di `f`; None diventa «tutti i
+    predittori presenti»."""
+    out = {}
+    for nome, cols in insiemi.items():
+        cols = [c for c in predittori if c in f.columns] if cols is None else cols
+        if set(cols) <= set(f.columns):
+            out[nome] = cols
+    return out
+
+
+def costruisci_features(x, y, w: int, orizzonte: int, meteo=None, ovx=None) -> pd.DataFrame:
     """Per ogni istante t (fine finestra): incrementi grezzi dx, dy sulla
     finestra, coseno (correlazione degli incrementi = parte simmetrica), area
     di Lévy normalizzata (parte antisimmetrica) e oscillazione degli incrementi
@@ -134,9 +149,13 @@ def costruisci_features(x, y, w: int, orizzonte: int, meteo=None) -> pd.DataFram
     Con `meteo` (anomalia di temperatura allineata a x) aggiunge la colonna
     `meteo`, media dell'anomalia sugli ultimi w bin; le righe con meno di meta'
     dei valori meteo disponibili sono scartate, cosi' tutti gli insiemi di
-    predittori vengono confrontati sugli stessi casi."""
+    predittori vengono confrontati sugli stessi casi.
+
+    Con `ovx` (ln della volatilita' attesa per bin, allineata a x) aggiunge la
+    colonna `ovx` con il valore all'istante t; le righe senza OVX sono scartate."""
     x, y = np.asarray(x, float), np.asarray(y, float)
     m = None if meteo is None else np.asarray(meteo, float)
+    o = None if ovx is None else np.asarray(ovx, float)
     rows = []
     for t in range(w, len(x) - orizzonte):
         xs, ys = x[t - w : t + 1], y[t - w : t + 1]
@@ -153,8 +172,13 @@ def costruisci_features(x, y, w: int, orizzonte: int, meteo=None) -> pd.DataFram
             if np.isfinite(ms).sum() < w / 2:
                 continue
             riga += (float(np.nanmean(ms)),)
+        if o is not None:
+            if not np.isfinite(o[t]):
+                continue
+            riga += (float(o[t]),)
         rows.append(riga)
-    cols = ["t", "dx", "dy", "cos", "levy", "sigma", "mad", "fwd"] + ([] if m is None else ["meteo"])
+    cols = (["t", "dx", "dy", "cos", "levy", "sigma", "mad", "fwd"] + ([] if m is None else ["meteo"])
+            + ([] if o is None else ["ovx"]))
     return pd.DataFrame(rows, columns=cols)
 
 
@@ -216,7 +240,7 @@ def validazione(feat: pd.DataFrame, orizzonte: int, soglia: float = 0.0, passo: 
     ybin = (f.fwd > soglia).astype(float).values
     if ybin.min() == ybin.max():
         raise ValueError("Il prezzo sale sempre (o non sale mai) oltre la soglia: cambia soglia o orizzonte.")
-    insiemi = {nome: cols for nome, cols in INSIEMI.items() if set(cols) <= set(f.columns)}
+    insiemi = _risolvi(INSIEMI, PREDITTORI, f)
     p0 = np.full(n, np.nan)
     prev = {nome: np.full(n, np.nan) for nome in insiemi}
     n_passi = 0
@@ -272,25 +296,32 @@ def validazione(feat: pd.DataFrame, orizzonte: int, soglia: float = 0.0, passo: 
 # radice della media dei quadrati degli incrementi di x (rendimenti
 # logaritmici). Si prevede il suo logaritmo con una regressione ridge, in stile
 # HAR: oscillazione su una finestra breve e una lunga, piu' l'agitazione
-# (escursione fra massimo e minimo), che ne e' una misura meno rumorosa.
+# (escursione fra massimo e minimo), che ne e' una misura meno rumorosa, e
+# facoltativamente la volatilita' attesa dal mercato (OVX) e il meteo.
 INSIEMI_OSC = {
     "Oscillazione recente": ["s_breve", "s_lungo", "mad"],
     "+ agitazione": ["s_breve", "s_lungo", "mad", "agit"],
     "+ agitazione e meteo": ["s_breve", "s_lungo", "mad", "agit", "meteo"],
+    "+ agitazione e OVX": ["s_breve", "s_lungo", "mad", "agit", "ovx"],
+    "Tutto": None,
 }
+PREDITTORI_OSC = ["s_breve", "s_lungo", "mad", "agit", "meteo", "ovx"]
 _PAVIMENTO = 1e-6  # evita ln(0) nei periodi senza movimento
 
 
-def costruisci_features_oscillazione(x, y, w: int, orizzonte: int, meteo=None, breve: int = 5) -> pd.DataFrame:
+def costruisci_features_oscillazione(x, y, w: int, orizzonte: int, meteo=None, ovx=None,
+                                    breve: int = 5) -> pd.DataFrame:
     """Una riga per ogni t >= w. Predittori (logaritmi): `s_breve` e `s_lungo`
     = RMS degli incrementi negli ultimi `breve` e w bin, `mad` = deviazione
     assoluta mediana sugli ultimi w; `agit` = media di y sugli ultimi `breve`
-    bin; `meteo` (opzionale) = media dell'anomalia sugli ultimi w bin.
+    bin; `meteo` (opzionale) = media dell'anomalia sugli ultimi w bin;
+    `ovx` (opzionale) = ln della volatilita' attesa per bin all'istante t.
     `bersaglio` = ln RMS degli incrementi nei prossimi `orizzonte` bin, NaN
     dove il futuro non e' ancora noto (servono per la previsione di oggi)."""
     x, y = np.asarray(x, float), np.asarray(y, float)
     r = np.r_[np.nan, np.diff(x)]
     m = None if meteo is None else np.asarray(meteo, float)
+    o = None if ovx is None else np.asarray(ovx, float)
     breve = min(breve, w)
     rows = []
     for t in range(w, len(x)):
@@ -307,6 +338,8 @@ def costruisci_features_oscillazione(x, y, w: int, orizzonte: int, meteo=None, b
         if m is not None:
             ms = m[t - w + 1 : t + 1]
             riga["meteo"] = float(np.nanmean(ms)) if np.isfinite(ms).sum() >= w / 2 else np.nan
+        if o is not None:
+            riga["ovx"] = float(o[t])
         rows.append(riga)
     return pd.DataFrame(rows)
 
@@ -322,7 +355,6 @@ def _fit_ridge(X, y, lam: float = 1.0):
     beta = np.linalg.solve(Z.T @ Z + R, Z.T @ y)
     var_res = float(np.var(y - Z @ beta))
     return (lambda Xn: np.c_[np.ones(len(Xn)), (Xn - mu) / sd] @ beta), var_res
-
 
 
 def prevedi_oscillazione(feat: pd.DataFrame, cols: list[str], lam: float = 1.0) -> float:
@@ -341,22 +373,25 @@ def valida_oscillazione(feat: pd.DataFrame, orizzonte: int, passo: int = 21, ini
                         lam: float = 1.0, anni=None):
     """Prova a finestre scorrevoli come `validazione`, ma per l'oscillazione.
 
-    Due riferimenti ingenui: «come appena passato» (prevede l'oscillazione
-    degli ultimi w bin, s_lungo) e «media storica» (media del bersaglio nel
-    training). Gli errori sono in punti percentuali di oscillazione per bin:
+    Riferimenti ingenui: «come appena passato» (prevede l'oscillazione degli
+    ultimi w bin, s_lungo), «media storica» (media del bersaglio nel training)
+    e, se c'e' la colonna `ovx`, «OVX cosi' com'e'» (la volatilita' attesa dal
+    mercato, senza alcun adattamento). Gli errori sono in punti percentuali di oscillazione per bin:
     bias = errore medio (positivo = sovrastima), MAD = errore assoluto medio,
     sigma = deviazione standard dell'errore. Il miglioramento e gli anni vinti
     sono misurati contro «come appena passato», il riferimento piu' difficile.
 
     Restituisce (tabella, serie con reale e previsioni per riga di test, meta)."""
-    cols_tutte = sorted({c for cols in INSIEMI_OSC.values() for c in cols} & set(feat.columns))
+    cols_tutte = [c for c in PREDITTORI_OSC if c in feat.columns]
     f = feat.dropna(subset=["bersaglio"] + cols_tutte).reset_index(drop=True)
     n = len(f)
     if n < 100:
         raise ValueError(f"Troppo pochi dati per la prova ({n} casi utili, ne servono almeno 100).")
-    insiemi = {nome: cols for nome, cols in INSIEMI_OSC.items() if set(cols) <= set(f.columns)}
+    insiemi = _risolvi(INSIEMI_OSC, PREDITTORI_OSC, f)
     prev = {nome: np.full(n, np.nan) for nome in insiemi}
     prev["Come appena passato"] = np.exp(f.s_lungo.values)
+    if "ovx" in f.columns:
+        prev["OVX così com'è"] = np.exp(f.ovx.values)
     prev["Media storica"] = np.full(n, np.nan)
     te = np.zeros(n, bool)
     n_passi = 0
