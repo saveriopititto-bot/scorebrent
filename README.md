@@ -183,7 +183,16 @@ Da quel momento il workflow (`.github/workflows/esporta-score.yml`) parte da sol
 
 ### Leggere lo score da FuelMode
 
-Basta la chiave pubblica `anon`. L'esito più recente:
+FuelMode ([fuelmode.streamlit.app](https://fuelmode.streamlit.app/), repository test3) lo legge già. Nella scheda «Risultato» c'è il riquadro «Il petrolio nei prossimi giorni», con l'esito (Rifornisci / Neutro / Aspetta), il Brent in euro e lo scarto dalla media dei 30 giorni. Il riquadro è solo informativo: non cambia il verdetto di FuelMode. Per attivarlo, nei Secrets dell'app FuelMode su Streamlit Cloud (*Manage app → ⋮ → Settings → Secrets*) servono:
+
+```toml
+SUPABASE_URL = "https://<progetto>.supabase.co"
+SUPABASE_ANON_KEY = "<chiave anon o publishable>"
+```
+
+Si usa la chiave **pubblica** (`anon` o `publishable`), che permette solo di leggere, mai quella `service_role`.
+
+Qualunque altra app può leggerlo allo stesso modo: basta la chiave pubblica. L'esito più recente:
 
 ```
 GET https://<progetto>.supabase.co/rest/v1/brent_score?select=data,esito,score&order=data.desc&limit=1
@@ -196,6 +205,18 @@ Con la libreria JavaScript di Supabase:
 const { data } = await supabase.from("brent_score").select("data, esito, score")
   .order("data", { ascending: false }).limit(1);
 ```
+
+Con Python, senza librerie di Supabase:
+
+```python
+import requests
+r = requests.get("https://<progetto>.supabase.co/rest/v1/brent_score",
+                 params={"select": "data,esito,score", "order": "data.desc", "limit": 1},
+                 headers={"apikey": "<chiave anon>"})
+oggi = r.json()[0]   # oggi["esito"]: 1 rifornisci, 0 neutro, -1 aspetta
+```
+
+Il dato cambia una volta per giorno di borsa, poco dopo le 22:30 UTC: basta leggerlo una volta al giorno o all'apertura dell'app.
 
 ### Provare lo script sul proprio computer
 
