@@ -20,9 +20,11 @@ SOLO_SCORE = st.query_params.get("pagina") == "score"
 st.set_page_config(page_title="Prezzo del petrolio", page_icon="🛢️", layout="wide",
                    initial_sidebar_state="collapsed" if SOLO_SCORE else "auto")
 style.apply_style()  # stile di FuelMode; il titolo dell'app è nella barra delle schede
-if SOLO_SCORE:
+if SOLO_SCORE:  # niente barra laterale, intestazione e margini: la scheda riempie il riquadro di FuelMode
     st.markdown("<style>[data-testid='stSidebar'], [data-testid='stSidebarCollapsedControl'], "
-                "[data-testid='stExpandSidebarButton'] {display: none;}</style>", unsafe_allow_html=True)
+                "[data-testid='stExpandSidebarButton'], header[data-testid='stHeader'] {display: none;} "
+                "[data-testid='stMainBlockContainer'] {padding: 0 !important;} "
+                "[data-testid='stMain'] [data-testid='stElementContainer']:has(style) {display: none;}</style>", unsafe_allow_html=True)
 
 
 # Nomi comprensibili per le previsioni dell'oscillazione (chiavi di bm.INSIEMI_OSC più i riferimenti).
