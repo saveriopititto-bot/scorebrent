@@ -187,7 +187,11 @@ Da quel momento il workflow (`.github/workflows/esporta-score.yml`) parte da sol
 
 FuelMode ([fuelmode.streamlit.app](https://fuelmode.streamlit.app/), repository [test3](https://github.com/saveriopititto-bot/test3)) lo legge già, e il collegamento è attivo. In cima alla scheda «Risultato» il riquadro «Consiglio» segue l'esito, con un cerchio colorato: «Conviene» con bordo verde e freccia in su (+1), «Rifornisci» con bordo arancione e pallino (0), «Aspetta» con bordo rosso e freccia in giù (−1). Lo score non cambia il calcolo del risparmio né la classifica dei distributori.
 
-La scheda «Petrolio» di FuelMode incorpora invece questa app, aperta solo sulla pagina «Score rifornimento»: indirizzo `https://scorebrent.streamlit.app/?embed=true&pagina=score`. Con `?pagina=score` l'app mostra solo quella pagina, senza titolo, barra laterale e altre schede, con le impostazioni predefinite (α = 1, θ = 1). Non scarica meteo e rischio geopolitico, che allo score non servono. Per attivarlo, nei Secrets dell'app FuelMode su Streamlit Cloud (*Manage app → ⋮ → Settings → Secrets*) servono:
+La scheda «Petrolio» di FuelMode incorpora invece questa app, aperta solo sulla pagina «Score rifornimento»: indirizzo `https://scorebrent.streamlit.app/?embed=true&pagina=score`. Con `?pagina=score` l'app mostra solo quella pagina, senza titolo, barra laterale e altre schede, con le impostazioni predefinite (α = 1, θ = 1). Non scarica meteo e rischio geopolitico, che allo score non servono.
+
+Se dopo un aggiornamento di questa app FuelMode mostra ancora tutta l'app invece della sola pagina dello score (oppure `https://scorebrent.streamlit.app/?pagina=score` mostra ancora titolo e schede), Streamlit Cloud non ha ricaricato la versione nuova: basta riavviare scorebrent con **Manage app → ⋮ → Reboot app**.
+
+Per leggere lo score da Supabase, nei Secrets dell'app FuelMode su Streamlit Cloud (*Manage app → ⋮ → Settings → Secrets*) servono:
 
 ```toml
 SUPABASE_URL = "https://<progetto>.supabase.co"
