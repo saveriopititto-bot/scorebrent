@@ -12,6 +12,8 @@ Corrispondenze con il paper
 | censura dei bin vuoti                  | non serve (ogni giorno di borsa ha prezzo) |
 | bersaglio: bin successivo > mediana    | bersaglio: rialzo oltre soglia nei prossimi|
 |                                        | `orizzonte` bin                            |
+| (nessuno)                              | m_k = temperatura in Europa rispetto al    |
+|                                        | normale stagionale (Open-Meteo), opzionale |
 
 Convenzione di segno dell'area di Lévy (eq. 6 del paper), con cammino
 (x, y) = (prezzo, attivita'): A > 0 se il cammino ruota in senso antiorario,
@@ -87,6 +89,26 @@ def area_levy_mobile(x, y, w: int) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
+# Meteo
+# --------------------------------------------------------------------------
+def anomalia_stagionale(temp: pd.Series, smussamento: int = 31) -> pd.Series:
+    """Temperatura giornaliera meno il suo normale stagionale.
+
+    Il normale e' la media, su tutti gli anni disponibili, dello stesso giorno
+    dell'anno, smussata con una media mobile circolare di `smussamento` giorni
+    (il 29 febbraio conta come 28). Positivo = piu' caldo del normale."""
+    temp = temp.dropna()
+    if temp.empty:
+        return temp
+    doy = np.minimum(temp.index.dayofyear - ((temp.index.is_leap_year) & (temp.index.dayofyear > 59)), 365)
+    clima = temp.groupby(doy).mean().reindex(range(1, 366)).interpolate(limit_direction="both")
+    k = smussamento // 2
+    giro = pd.concat([clima.iloc[-k:], clima, clima.iloc[:k]])
+    clima = giro.rolling(smussamento, center=True, min_periods=1).mean().iloc[k : k + 365]
+    return temp - clima.to_numpy()[doy - 1]
+
+
+# --------------------------------------------------------------------------
 # Validazione fuori campione (§3.6 del paper)
 # --------------------------------------------------------------------------
 INSIEMI = {
@@ -94,14 +116,22 @@ INSIEMI = {
     "+ coseno": ["dx", "dy", "cos"],
     "+ area di Lévy": ["dx", "dy", "levy"],
     "Tutto": ["dx", "dy", "cos", "levy"],
+    "+ meteo": ["dx", "dy", "meteo"],
+    "Tutto + meteo": ["dx", "dy", "cos", "levy", "meteo"],
 }
 
 
-def costruisci_features(x, y, w: int, orizzonte: int) -> pd.DataFrame:
+def costruisci_features(x, y, w: int, orizzonte: int, meteo=None) -> pd.DataFrame:
     """Per ogni istante t (fine finestra): incrementi grezzi dx, dy sulla
     finestra, coseno (correlazione degli incrementi = parte simmetrica) e area
-    di Lévy normalizzata (parte antisimmetrica). `fwd` = x[t+orizzonte] - x[t]."""
+    di Lévy normalizzata (parte antisimmetrica). `fwd` = x[t+orizzonte] - x[t].
+
+    Con `meteo` (anomalia di temperatura allineata a x) aggiunge la colonna
+    `meteo`, media dell'anomalia sugli ultimi w bin; le righe con meno di meta'
+    dei valori meteo disponibili sono scartate, cosi' tutti gli insiemi di
+    predittori vengono confrontati sugli stessi casi."""
     x, y = np.asarray(x, float), np.asarray(y, float)
+    m = None if meteo is None else np.asarray(meteo, float)
     rows = []
     for t in range(w, len(x) - orizzonte):
         xs, ys = x[t - w : t + 1], y[t - w : t + 1]
@@ -109,11 +139,16 @@ def costruisci_features(x, y, w: int, orizzonte: int) -> pd.DataFrame:
         sx, sy = dx.std(ddof=1), dy.std(ddof=1)
         if sx == 0 or sy == 0:
             continue
-        rows.append(
-            (t, xs[-1] - xs[0], ys[-1] - ys[0], float(np.corrcoef(dx, dy)[0, 1]),
-             area_levy(xs, ys) / (w * sx * sy), x[t + orizzonte] - x[t])
-        )
-    return pd.DataFrame(rows, columns=["t", "dx", "dy", "cos", "levy", "fwd"])
+        riga = (t, xs[-1] - xs[0], ys[-1] - ys[0], float(np.corrcoef(dx, dy)[0, 1]),
+                area_levy(xs, ys) / (w * sx * sy), x[t + orizzonte] - x[t])
+        if m is not None:
+            ms = m[t - w + 1 : t + 1]
+            if np.isfinite(ms).sum() < w / 2:
+                continue
+            riga += (float(np.nanmean(ms)),)
+        rows.append(riga)
+    cols = ["t", "dx", "dy", "cos", "levy", "fwd"] + ([] if m is None else ["meteo"])
+    return pd.DataFrame(rows, columns=cols)
 
 
 def _sigmoid(z):
@@ -177,6 +212,8 @@ def validazione(feat: pd.DataFrame, orizzonte: int, soglia: float = 0.0,
     brier_base = float(np.mean((p0 - yte) ** 2))
     rows = []
     for nome, cols in INSIEMI.items():
+        if not set(cols) <= set(f.columns):
+            continue
         Xtr, Xte = tr[cols].values, te[cols].values
         mu, sd = Xtr.mean(0), Xtr.std(0)
         sd[sd == 0] = 1.0
