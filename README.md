@@ -185,7 +185,7 @@ Da quel momento il workflow (`.github/workflows/esporta-score.yml`) parte da sol
 
 ### Leggere lo score da FuelMode
 
-FuelMode ([fuelmode.streamlit.app](https://fuelmode.streamlit.app/), repository [test3](https://github.com/saveriopititto-bot/test3)) lo legge già, e il collegamento è attivo. Nella scheda «Risultato» c'è il riquadro «Il petrolio nei prossimi giorni», con l'esito (Rifornisci / Neutro / Aspetta), il Brent in euro e lo scarto dalla media dei 30 giorni. Il riquadro è solo informativo: non cambia il verdetto di FuelMode. Per attivarlo, nei Secrets dell'app FuelMode su Streamlit Cloud (*Manage app → ⋮ → Settings → Secrets*) servono:
+FuelMode ([fuelmode.streamlit.app](https://fuelmode.streamlit.app/), repository [test3](https://github.com/saveriopititto-bot/test3)) lo legge già, e il collegamento è attivo. Nella scheda «Risultato» c'è il riquadro «Il petrolio nei prossimi giorni», con l'esito (Rifornisci / Neutro / Aspetta), il Brent in euro e lo scarto dalla media dei 30 giorni. Lo stesso esito compare come cerchio colorato nel riquadro della decisione: bordo verde con freccia in su (+1), arancione con pallino (0), rosso con freccia in giù (−1). Sono informazioni in più: non cambiano il verdetto di FuelMode. Per attivarlo, nei Secrets dell'app FuelMode su Streamlit Cloud (*Manage app → ⋮ → Settings → Secrets*) servono:
 
 ```toml
 SUPABASE_URL = "https://<progetto>.supabase.co"
