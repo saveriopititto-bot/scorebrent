@@ -1,0 +1,46 @@
+# Prezzo del petrolio (Brent)
+
+App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
+
+## Cosa mostra
+
+L'app ha tre schede.
+
+- **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a 5 anni).
+- **Andamento**: di quanto il prezzo è salito o sceso in ogni giorno o settimana, con un riepilogo:
+  - movimento complessivo, variazione tipica, salita e discesa più grandi;
+  - quanto è stato lineare l'andamento;
+  - forza della variazione recente rispetto all'oscillazione normale;
+  - un indice che dice se si muove prima il prezzo o l'agitazione del mercato (l'«area di Lévy»).
+- **Prova di previsione**: controlla se l'andamento passato aiuta davvero a prevedere un rialzo nei giorni o nelle settimane successive.
+  - Il modello impara sul primo 60% dei dati e viene verificato sul restante 40%.
+  - Il risultato è confrontato con una stima di riferimento che non guarda il passato recente.
+
+Le impostazioni dell'analisi sono nella barra laterale: raggruppamento per giorni o settimane, periodo analizzato, finestra mobile, orizzonte e soglia di rialzo.
+
+## Avvio
+
+Serve Python 3.10 o successivo.
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+L'app si apre nel browser all'indirizzo http://localhost:8501. Per scaricare i prezzi deve poter raggiungere Yahoo Finance (`query1.finance.yahoo.com`, `query2.finance.yahoo.com`, `fc.yahoo.com`).
+
+## File
+
+| File | Contenuto |
+|---|---|
+| `app.py` | L'interfaccia: download dei dati, schede, grafici e testi. |
+| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, regressione logistica e prova fuori campione. Non dipende da Streamlit. |
+| `requirements.txt` | Le librerie Python necessarie. |
+| `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
+
+## Dati e avvertenze
+
+- **Fonti**: contratto future sul Brent `BZ=F` (dollari al barile) e cambio `EURUSD=X`, scaricati con [yfinance](https://github.com/ranaroussi/yfinance) e aggiornati al massimo ogni 15 minuti.
+- **Salti fra contratti**: `BZ=F` è un contratto con scadenza mensile. Il passaggio da un contratto al successivo produce piccoli salti che non sono veri movimenti del mercato.
+- **Previsioni**: i periodi vicini si sovrappongono, quindi i casi davvero indipendenti nella prova di previsione sono meno di quanti sembrano.
+- **Uso**: i dati possono arrivare in ritardo. L'app ha scopo di analisi e non è un consiglio di investimento.
