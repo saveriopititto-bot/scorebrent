@@ -115,7 +115,7 @@ def grafico(df: pd.DataFrame, titolo_y: str, barre: bool = False, colori: list[s
         tooltip=[alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y"), alt.Tooltip("Serie:N", title="Serie"),
                  alt.Tooltip("Valore:Q", title="Valore", format=".2f")],
     )
-    st.altair_chart(c, use_container_width=True)
+    st.altair_chart(c, width="stretch")
 
 
 # --------------------------------------------------------------------------
