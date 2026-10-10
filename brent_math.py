@@ -504,3 +504,54 @@ def verifica_score(score: pd.DataFrame, orizzonte: int = 5) -> pd.DataFrame:
                       "Variazione media": float(100 * x.mean()) if len(x) else np.nan,
                       "Giorni in salita": float((x > 0).mean()) if len(x) else np.nan})
     return pd.DataFrame(righe)
+
+
+# --------------------------------------------------------------------------
+# Prezzi alla pompa (settimanali)
+# --------------------------------------------------------------------------
+def ritardo_pompa(brent_l: pd.Series, pompa: pd.Series, max_ritardo: int = 4) -> pd.DataFrame:
+    """Quanto e con che ritardo la pompa segue il Brent, su serie settimanali
+    allineate (stesso indice di date, euro al litro). Per ogni ritardo k in
+    settimane: correlazione fra la variazione del Brent nella settimana w e
+    quella della pompa nella settimana w+k, e quota trasferita (pendenza della
+    retta: centesimi alla pompa per centesimo di Brent)."""
+    db = brent_l.diff()
+    dp = pompa.diff()
+    righe = []
+    for k in range(max_ritardo + 1):
+        d = pd.concat([db, dp.shift(-k)], axis=1).dropna()
+        if len(d) < 30:
+            continue
+        x, y = d.iloc[:, 0].values, d.iloc[:, 1].values
+        righe.append({"Ritardo (settimane)": k, "Correlazione": float(np.corrcoef(x, y)[0, 1]),
+                      "Quota trasferita": float(np.polyfit(x, y, 1)[0]), "Settimane": len(d)})
+    return pd.DataFrame(righe)
+
+
+def verifica_score_pompa(classe: pd.Series, pompa: pd.DataFrame, settimane=(1, 2), litri: float = 50.0):
+    """Verifica dello score sui prezzi alla pompa. `classe` = esito dello
+    score nel giorno del listino (indice = settimane di `pompa`); `pompa` ha
+    una colonna per carburante, in euro al litro.
+
+    Restituisce (tabella, risparmio). La tabella dà, per esito, la variazione
+    media della pompa dopo 1 e 2 settimane in centesimi al litro. Il risparmio
+    e' quanto si guadagna in media, per pieno di `litri` litri, seguendo lo
+    score nelle settimane con +1 o -1: con +1 si rifornisce subito invece di
+    dopo (si guadagna l'aumento), con -1 si aspetta (si guadagna il calo)."""
+    righe, risparmio = [], []
+    nomi = {1: "+1", 0: "0", -1: "-1"}
+    for nome_c, sel in [(nomi[c], classe == c) for c in (1, 0, -1)] + [("Tutte", classe.notna())]:
+        riga = {"Classe": nome_c, "Settimane": int(sel.sum())}
+        for carb in pompa.columns:
+            for h in settimane:
+                dv = (pompa[carb].shift(-h) - pompa[carb])[sel].dropna()
+                riga[f"{carb} dopo {h}"] = float(100 * dv.mean()) if len(dv) else np.nan
+        righe.append(riga)
+    segnale = classe.where(classe != 0)
+    for carb in pompa.columns:
+        for h in settimane:
+            g = (segnale * (pompa[carb].shift(-h) - pompa[carb])).dropna()
+            risparmio.append({"Carburante": carb, "Settimane": h, "Segnali": len(g),
+                              "Risparmio medio (€ per pieno)": float(litri * g.mean()) if len(g) else np.nan,
+                              "Volte in cui ha fatto risparmiare": float((g > 0).mean()) if len(g) else np.nan})
+    return pd.DataFrame(righe), pd.DataFrame(risparmio)
