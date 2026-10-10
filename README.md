@@ -152,13 +152,73 @@ L'app si pubblica scegliendo questo repository, il branch `main` e il file `app.
 
 Dopo un aggiornamento che cambia sia `app.py` sia `brent_math.py`, Streamlit può ricaricare solo `app.py` e tenere in memoria la versione vecchia di `brent_math.py`. Ne nasce un errore come `got an unexpected keyword argument`. In quel caso basta riavviare l'app: **Manage app → ⋮ → Reboot app**.
 
+## Esportazione in Supabase (per FuelMode)
+
+Ogni giorno lo score di rifornimento viene scritto nella tabella `brent_score` di Supabase, una riga per giorno di borsa, così FuelMode può leggerlo. Lo fa lo script `esporta_score.py`, che usa gli stessi dati e lo stesso calcolo dell'app (`dati.py` e `brent_math.score_storico`). Con α = 1 e θ = 1 il valore in Supabase è identico a quello della scheda «Score rifornimento».
+
+### Da fare una volta
+
+1. **Creare la tabella**: in Supabase apri *SQL Editor → New query*, incolla il contenuto di `supabase/brent_score.sql` ed esegui. La tabella si può leggere con la chiave pubblica (`anon`); scrive solo lo script, con la chiave `service_role`.
+2. **Aggiungere i segreti su GitHub**: nel repository, *Settings → Secrets and variables → Actions → New repository secret*:
+   - `SUPABASE_URL`: l'indirizzo del progetto, per esempio `https://abcdefgh.supabase.co` (in Supabase: *Project Settings → API*);
+   - `SUPABASE_SERVICE_ROLE_KEY`: la chiave `service_role` dalla stessa pagina. È una chiave segreta: va solo nei segreti di GitHub, mai in FuelMode, nell'app o nel codice.
+3. **Caricare lo storico**: in GitHub, *Actions → Esporta score in Supabase → Run workflow*, con «giorni» = `0`. Scrive tutti i giorni dal 2015 circa.
+
+Da quel momento il workflow (`.github/workflows/esporta-score.yml`) parte da solo dal lunedì al venerdì alle 22:30 UTC, dopo la chiusura del Brent. Ogni volta invia gli ultimi 5 giorni, così recupera anche un giorno saltato. Le righe già presenti vengono aggiornate, non duplicate.
+
+### Colonne della tabella `brent_score`
+
+| colonna | significato |
+|---|---|
+| `data` | giorno di borsa (chiave) |
+| `esito` | +1 rifornisci, 0 neutro, −1 aspetta |
+| `score` | score continuo S |
+| `brent_eur`, `media_30_eur` | Brent in euro al barile e media degli ultimi 30 giorni |
+| `scarto` | ln(prezzo / media 30 giorni) |
+| `oscillazione_5g` | oscillazione attesa in 5 giorni (0.05 = 5%) |
+| `stabilita` | fattore di stabilità, fra 0 e 1 |
+| `alpha`, `theta` | parametri usati |
+| `modello` | modello dell'oscillazione («+ agitazione e OVX», o «+ agitazione» se quel giorno l'OVX mancava) |
+| `aggiornato_il` | quando è stata scritta la riga |
+
+### Leggere lo score da FuelMode
+
+Basta la chiave pubblica `anon`. L'esito più recente:
+
+```
+GET https://<progetto>.supabase.co/rest/v1/brent_score?select=data,esito,score&order=data.desc&limit=1
+apikey: <chiave anon>
+```
+
+Con la libreria JavaScript di Supabase:
+
+```js
+const { data } = await supabase.from("brent_score").select("data, esito, score")
+  .order("data", { ascending: false }).limit(1);
+```
+
+### Provare lo script sul proprio computer
+
+```bash
+pip install -r requirements-export.txt
+python esporta_score.py --prova            # calcola e stampa le ultime righe, senza inviarle
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... python esporta_score.py   # invia gli ultimi 5 giorni
+```
+
+Opzioni: `--giorni N` (0 = tutto lo storico), `--alpha` e `--theta` (default 1). Gli α e θ scelti nella barra laterale dell'app non cambiano l'esportazione. Per usare valori diversi, cambiali nel workflow e rilancialo con «giorni» = `0` per riscrivere lo storico.
+
 ## File
 
 | File | Contenuto |
 |---|---|
 | `app.py` | L'interfaccia: download di prezzi, OVX, GPR, temperature e prezzi alla pompa, schede, grafici e testi. |
-| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione, score di rifornimento e prova a finestre scorrevoli. Non dipende da Streamlit. |
-| `requirements.txt` | Le librerie Python necessarie. |
+| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione, score di rifornimento (`score_storico`), ritardo della pompa e prova a finestre scorrevoli. Non dipende da Streamlit. |
+| `dati.py` | Download da Yahoo Finance (Brent, cambio, OVX) e preparazione dei prezzi, senza Streamlit: lo usano sia l'app sia lo script di esportazione. |
+| `esporta_score.py` | Calcola lo score e lo scrive nella tabella `brent_score` di Supabase. |
+| `supabase/brent_score.sql` | Crea la tabella `brent_score` e la regola di lettura pubblica. |
+| `.github/workflows/esporta-score.yml` | Esegue l'esportazione ogni giorno di borsa e su richiesta. |
+| `requirements.txt` | Le librerie Python dell'app. |
+| `requirements-export.txt` | Le librerie che servono solo allo script di esportazione (senza Streamlit). |
 | `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
 
 ## Dati e avvertenze

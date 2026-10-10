@@ -491,6 +491,30 @@ def score_rifornimento(prezzo: pd.Series, sigma: pd.Series, sigma_norm: pd.Serie
                          "stabilita": stab, "S": s, "classe": classe})
 
 
+def score_storico(base: pd.DataFrame, ovx=None, alpha: float = 1.0, soglia: float = 1.0, finestra: int = 20,
+                  orizzonte: int = 5):
+    """Score di rifornimento per ogni giorno di `base` (colonne eur, high, low; indice di date).
+
+    L'oscillazione attesa viene dal modello «+ agitazione e OVX» (o «+ agitazione» senza `ovx`, che e' il
+    ln della volatilita' attesa al giorno allineato a `base`), calcolato giorno per giorno sugli ultimi
+    `finestra` giorni. Per i giorni passati e' quella di oscillazione_scorrevole (senza usare il futuro);
+    per l'ultimo giorno quella del modello addestrato su tutto lo storico. L'oscillazione normale e' la
+    mediana di quella osservata fino a ciascun giorno.
+
+    Restituisce (tabella di score_rifornimento, nome del modello usato)."""
+    date = base.index
+    x = np.log(base["eur"].to_numpy())
+    y = np.log1p(100 * (base["high"] / base["low"] - 1)).to_numpy()
+    feat = costruisci_features_oscillazione(x, y, finestra, orizzonte, ovx=ovx)
+    modello = "+ agitazione e OVX" if ovx is not None else "+ agitazione"
+    cols = INSIEMI_OSC[modello]
+    sig_t = oscillazione_scorrevole(feat, cols, orizzonte)
+    sigma = pd.Series(sig_t.values, index=date[sig_t.index]).reindex(date)
+    sigma.iloc[-1] = prevedi_oscillazione(feat, cols)
+    norma = pd.Series(np.exp(feat["s_lungo"].values), index=date[feat["t"].values]).reindex(date).expanding().median()
+    return score_rifornimento(base["eur"], sigma, norma, alpha, soglia, orizzonte), modello
+
+
 def verifica_score(score: pd.DataFrame, orizzonte: int = 5) -> pd.DataFrame:
     """Cosa ha fatto il Brent nei `orizzonte` giorni di borsa dopo ogni classe:
     numero e quota di giorni, variazione media e quota di giorni in cui e' salito.

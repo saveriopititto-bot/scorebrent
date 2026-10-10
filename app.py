@@ -8,16 +8,13 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-import yfinance as yf
 
 import brent_math as bm
+import dati
 
 st.set_page_config(page_title="Prezzo del petrolio", page_icon="🛢️", layout="wide")
 st.title("🛢️ Prezzo del petrolio (Brent)")
 
-BRENT = "BZ=F"        # Brent Crude Oil Futures (USD/barile)
-EURUSD = "EURUSD=X"   # dollari per 1 euro
-OVX = "^OVX"          # CBOE Crude Oil Volatility Index: volatilità annua attesa a 30 giorni, in %
 
 # Nomi comprensibili per le previsioni dell'oscillazione (chiavi di bm.INSIEMI_OSC più i riferimenti).
 NOMI_OSC = {
@@ -64,13 +61,7 @@ LITRI_BARILE = 158.987
 
 @st.cache_data(ttl=900, show_spinner="Scarico i prezzi da Yahoo Finance…")
 def scarica(ticker: str) -> pd.DataFrame:
-    d = yf.Ticker(ticker).history(period="max", interval="1d")
-    if d.empty:
-        raise ValueError(f"Yahoo Finance non ha restituito dati per {ticker}")
-    d = d[["High", "Low", "Close"]].dropna()
-    d = d[(d.Low > 0) & (d.High >= d.Low)]  # scarta le righe con prezzi impossibili
-    d.index = d.index.tz_localize(None).normalize()
-    return d
+    return dati.scarica_yahoo(ticker)
 
 
 def _temperature(url: str, **params) -> pd.DataFrame:
@@ -204,17 +195,12 @@ theta_s = sb.slider("Soglia (θ)", 0.25, 3.0, 1.0, 0.25,
 # Dati
 # --------------------------------------------------------------------------
 try:
-    b, f = scarica(BRENT), scarica(EURUSD)
+    b, f = scarica(dati.BRENT), scarica(dati.EURUSD)
 except Exception as e:
     st.error(f"Non sono riuscito a scaricare i prezzi: {e}")
     st.stop()
 
-# Solo i giorni in cui il Brent quota; il cambio è riportato sull'ultimo valore disponibile.
-base = pd.DataFrame(
-    {"usd": b["Close"], "high": b["High"], "low": b["Low"],
-     "fx": f["Close"].reindex(b.index, method="ffill")}
-).dropna()
-base["eur"] = base["usd"] / base["fx"]
+base = dati.costruisci_base(b, f)
 
 t = base.index[-1]
 tn = t - pd.Timedelta(days=n)
@@ -239,7 +225,7 @@ if usa_meteo:
 ovx_serie, errore_ovx = None, None
 if usa_ovx:
     try:
-        ovx_serie = scarica(OVX)["Close"]
+        ovx_serie = scarica(dati.OVX)["Close"]
     except Exception as e:
         errore_ovx = str(e)
 
@@ -294,10 +280,11 @@ def serie(freq: str):
         m_bin = anomalia if freq == "Giorno per giorno" else anomalia.resample("W-FRI").mean()
         m = m_bin.reindex(bins.index).to_numpy()
     o = None
-    if ovx_serie is not None:
-        o_bin = ovx_serie.reindex(base.index, method="ffill", limit=5)
-        o_bin = o_bin if freq == "Giorno per giorno" else o_bin.resample("W-FRI").last()
-        o = np.log(o_bin.reindex(bins.index).to_numpy() / 100 / np.sqrt(252 if freq == "Giorno per giorno" else 52))
+    if ovx_serie is not None and freq == "Giorno per giorno":
+        o = dati.ovx_giornaliero(ovx_serie, bins.index)
+    elif ovx_serie is not None:
+        o_bin = ovx_serie.reindex(base.index, method="ffill", limit=5).resample("W-FRI").last()
+        o = np.log(o_bin.reindex(bins.index).to_numpy() / 100 / np.sqrt(52))
     g = None
     if gpr_df is not None:
         gd = gpr_df["GPRD"]
@@ -314,25 +301,16 @@ periodi_anno = 252 if freq == "Giorno per giorno" else 52
 # Scheda «Prossimi 5 giorni» - sempre giorno per giorno, indipendente da «Raggruppa i prezzi»
 # --------------------------------------------------------------------------
 GIORNI_PREV, FINESTRA_PREV = 5, 20
-# Oscillazione attesa giorno per giorno, usata da «Prossimi 5 giorni» e «Score rifornimento».
-bins_g, x_g, y_g, m_g, o_g, _ = serie("Giorno per giorno")
-feat_g = bm.costruisci_features_oscillazione(x_g, y_g, FINESTRA_PREV, GIORNI_PREV, meteo=m_g, ovx=o_g)
-modello_g = "+ agitazione e OVX" if o_g is not None else "+ agitazione"
+# Score e oscillazione attesa giorno per giorno, usati da «Score rifornimento» e «Prossimi 5 giorni»: è lo stesso
+# calcolo che esporta_score.py scrive in Supabase.
+o_g = dati.ovx_giornaliero(ovx_serie, base.index) if ovx_serie is not None else None
 try:
-    sig = bm.prevedi_oscillazione(feat_g, bm.INSIEMI_OSC[modello_g])  # oscillazione attesa al giorno (frazione)
+    sc, modello_g = bm.score_storico(base, o_g, alpha_s, theta_s, FINESTRA_PREV, GIORNI_PREV)
+    sig = float(sc["sigma"].iloc[-1])                                   # oscillazione attesa al giorno (frazione)
     errore_sig = None
 except Exception as e:
-    sig, errore_sig = None, str(e)
-
-
-def storico_oscillazione(feat: pd.DataFrame, cols: list[str], date: pd.DatetimeIndex):
-    """Oscillazione attesa di ogni giorno, calcolata senza guardare il futuro, e oscillazione «normale»
-    (mediana di quella osservata fino a quel giorno)."""
-    sig_t = bm.oscillazione_scorrevole(feat, cols, GIORNI_PREV)
-    sigma = pd.Series(sig_t.values, index=date[sig_t.index]).reindex(date)
-    # oscillazione normale = mediana di quella osservata fino a quel giorno
-    norma = pd.Series(np.exp(feat["s_lungo"].values), index=date[feat["t"].values]).reindex(date).expanding().median()
-    return sigma, norma
+    sc, sig, errore_sig = None, None, str(e)
+    modello_g = "+ agitazione e OVX" if o_g is not None else "+ agitazione"
 
 
 with tab_score:
@@ -340,11 +318,6 @@ with tab_score:
     if errore_sig is not None:
         st.error(f"Non riesco a calcolare lo score: {errore_sig}")
     else:
-        sigma_s, norma_s = storico_oscillazione(feat_g, bm.INSIEMI_OSC[modello_g], bins_g.index)
-        # oggi si usa la stessa oscillazione attesa delle altre schede (modello addestrato su tutto lo storico)
-        sigma_s = sigma_s.copy()
-        sigma_s.iloc[-1] = sig
-        sc = bm.score_rifornimento(bins_g["eur"], sigma_s, norma_s, alpha_s, theta_s, GIORNI_PREV)
         oggi = sc.iloc[-1]
         classe = int(oggi["classe"])
         testo = {
