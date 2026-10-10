@@ -15,13 +15,17 @@ st.title("🛢️ Prezzo del petrolio (Brent)")
 
 BRENT = "BZ=F"        # Brent Crude Oil Futures (USD/barile)
 EURUSD = "EURUSD=X"   # dollari per 1 euro
+OVX = "^OVX"          # CBOE Crude Oil Volatility Index: volatilità annua attesa a 30 giorni, in %
 
-# Nomi comprensibili per le previsioni dell'oscillazione (chiavi di bm.INSIEMI_OSC più i due riferimenti).
+# Nomi comprensibili per le previsioni dell'oscillazione (chiavi di bm.INSIEMI_OSC più i riferimenti).
 NOMI_OSC = {
     "Oscillazione recente": "Modello: oscillazione recente (sigma e MAD)",
     "+ agitazione": "Modello: + agitazione (massimo − minimo)",
     "+ agitazione e meteo": "Modello: + agitazione e temperatura",
+    "+ agitazione e OVX": "Modello: + agitazione e OVX",
+    "Tutto": "Modello: tutti i dati disponibili",
     "Come appena passato": "Riferimento: come nel periodo appena passato",
+    "OVX così com'è": "Riferimento: OVX così com'è",
     "Media storica": "Riferimento: media storica",
 }
 
@@ -31,9 +35,9 @@ NOMI_INSIEMI = {
     "+ coseno": "+ quanto prezzo e agitazione si muovono insieme",
     "+ area di Lévy": "+ chi anticipa chi",
     "+ oscillazione": "+ quanto oscilla il prezzo (sigma e MAD)",
-    "Tutto": "Tutti i dati insieme",
     "+ meteo": "+ temperatura in Europa",
-    "Tutto + meteo": "Tutti i dati + temperatura in Europa",
+    "+ OVX": "+ volatilità attesa dal mercato (OVX)",
+    "Tutto": "Tutti i dati disponibili",
 }
 
 # Città europee di cui si fa la media della temperatura (latitudine, longitudine).
@@ -139,6 +143,9 @@ soglia = sb.number_input("Rialzo minimo da prevedere (%)", value=0.0, step=0.5,
 usa_meteo = sb.checkbox("Usa la temperatura in Europa", value=True,
                         help=f"Media di {', '.join(CITTA)}, da Open-Meteo. Serve per la scheda «Meteo» e per "
                              "provare se il caldo o il freddo aiutano a prevedere il prezzo.")
+usa_ovx = sb.checkbox("Usa la volatilità attesa dal mercato (OVX)", value=True,
+                      help="L'indice OVX misura quanto gli operatori si aspettano che il petrolio oscilli nei prossimi "
+                           "30 giorni, ricavato dai prezzi delle opzioni. Viene aggiunto alle previsioni.")
 
 # --------------------------------------------------------------------------
 # Dati
@@ -175,6 +182,14 @@ if usa_meteo:
     except Exception as e:
         errore_meteo = str(e)
 
+# Volatilità attesa dal mercato (OVX, % annuo); None se disattivata o non disponibile.
+ovx_serie, errore_ovx = None, None
+if usa_ovx:
+    try:
+        ovx_serie = scarica(OVX)["Close"]
+    except Exception as e:
+        errore_ovx = str(e)
+
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Prezzo", "Andamento", "Meteo", "Prova di previsione", "Oscillazione attesa"])
 
 # --------------------------------------------------------------------------
@@ -203,6 +218,12 @@ m = None                                                             # meteo: an
 if anomalia is not None:
     m_bin = anomalia if freq == "Giorno per giorno" else anomalia.resample("W-FRI").mean()
     m = m_bin.reindex(bins.index).to_numpy()
+o = None                                                             # OVX: ln volatilità attesa per periodo
+if ovx_serie is not None:
+    periodi_anno = 252 if freq == "Giorno per giorno" else 52
+    o_bin = ovx_serie.reindex(base.index, method="ffill", limit=5)
+    o_bin = o_bin if freq == "Giorno per giorno" else o_bin.resample("W-FRI").last()
+    o = np.log(o_bin.reindex(bins.index).to_numpy() / 100 / np.sqrt(periodi_anno))
 
 # --------------------------------------------------------------------------
 # Scheda 2 - Andamento
@@ -309,11 +330,13 @@ with tab4:
         "«rialzo minimo da prevedere» è sopra lo 0%."
         + (f" **Temperatura**: media della temperatura rispetto al normale sugli ultimi {w} {unita}."
            if m is not None else "")
+        + (" **OVX**: quanto il mercato si aspetta che il petrolio oscilli nei prossimi 30 giorni."
+           if o is not None else "")
     )
     if st.button("Esegui la prova"):
         try:
             with st.spinner("Eseguo la prova su tutto lo storico…"):
-                feat = bm.costruisci_features(x, y, w, orizzonte, meteo=m)
+                feat = bm.costruisci_features(x, y, w, orizzonte, meteo=m, ovx=o)
                 res, meta = bm.validazione(feat, orizzonte, soglia / 100, passo=passo,
                                            anni=bins.index[feat["t"].to_numpy()].year)
         except Exception as e:
@@ -381,11 +404,14 @@ with tab5:
     st.markdown(
         "Prevedere se il prezzo salirà o scenderà è quasi impossibile; prevedere **quanto si muoverà** è molto più "
         "fattibile, perché i periodi agitati tendono a durare. Il modello usa l'oscillazione recente (*sigma* e *MAD*, "
-        f"sugli ultimi {w} {unita} e sugli ultimi 5) e l'agitazione, cioè la distanza fra massimo e minimo."
+        f"sugli ultimi {w} {unita} e sugli ultimi 5) e l'agitazione, cioè la distanza fra massimo e minimo"
+        + (", più la volatilità attesa dal mercato (OVX)." if o is not None else ".")
     )
-    feat_osc = bm.costruisci_features_oscillazione(x, y, w, orizzonte, meteo=m)
+    if usa_ovx and o is None:
+        st.warning(f"Non sono riuscito a scaricare l'OVX, continuo senza: {errore_ovx}")
+    feat_osc = bm.costruisci_features_oscillazione(x, y, w, orizzonte, meteo=m, ovx=o)
     try:
-        cols_oggi = bm.INSIEMI_OSC["+ agitazione"]
+        cols_oggi = bm.INSIEMI_OSC["+ agitazione e OVX" if o is not None else "+ agitazione"]
         attesa = 100 * bm.prevedi_oscillazione(feat_osc, cols_oggi)
     except Exception as e:
         st.error(str(e))
@@ -401,9 +427,17 @@ with tab5:
                        "nel restante terzo va oltre, in su o in giù.")
         c3.metric("In euro al barile", f"±{ora['eur'] * escursione / 100:.2f} €",
                   help=f"Lo stesso intervallo applicato al prezzo attuale di {ora['eur']:.2f} € al barile.")
+        if ovx_serie is not None:
+            ovx_oggi = ovx_serie.dropna()
+            st.caption(
+                f"OVX al {ovx_oggi.index[-1]:%d/%m/%Y}: **{ovx_oggi.iloc[-1]:.1f}**, cioè il mercato si aspetta "
+                f"un'oscillazione di circa {ovx_oggi.iloc[-1] / np.sqrt(periodi_anno):.2f}% {al_periodo}. "
+                "L'OVX è calcolato sulle opzioni del petrolio WTI americano, che si muove quasi insieme al Brent. "
+                "La previsione in alto usa il modello «+ agitazione e OVX»."
+            )
 
     st.markdown("**Quanto è affidabile?** La prova usa le stesse finestre scorrevoli della scheda «Prova di "
-                "previsione» e confronta il modello con due riferimenti semplici.")
+                "previsione» e confronta i modelli con riferimenti semplici.")
     if st.button("Esegui la prova dell'oscillazione"):
         try:
             with st.spinner("Eseguo la prova su tutto lo storico…"):
