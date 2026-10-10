@@ -21,6 +21,7 @@ NOMI_INSIEMI = {
     "Livello 1 (dx, dy)": "Solo le variazioni recenti",
     "+ coseno": "+ quanto prezzo e agitazione si muovono insieme",
     "+ area di Lévy": "+ chi anticipa chi",
+    "+ oscillazione": "+ quanto oscilla il prezzo (sigma e MAD)",
     "Tutto": "Tutti i dati insieme",
     "+ meteo": "+ temperatura in Europa",
     "Tutto + meteo": "Tutti i dati + temperatura in Europa",
@@ -40,10 +41,11 @@ METEO_RECENTE = "https://api.open-meteo.com/v1/forecast"
 
 @st.cache_data(ttl=900, show_spinner="Scarico i prezzi da Yahoo Finance…")
 def scarica(ticker: str) -> pd.DataFrame:
-    d = yf.Ticker(ticker).history(period="5y", interval="1d")
+    d = yf.Ticker(ticker).history(period="max", interval="1d")
     if d.empty:
         raise ValueError(f"Yahoo Finance non ha restituito dati per {ticker}")
     d = d[["High", "Low", "Close"]].dropna()
+    d = d[(d.Low > 0) & (d.High >= d.Low)]  # scarta le righe con prezzi impossibili
     d.index = d.index.tz_localize(None).normalize()
     return d
 
@@ -108,8 +110,10 @@ def grafico(df: pd.DataFrame, titolo_y: str, barre: bool = False, colori: list[s
 # --------------------------------------------------------------------------
 sb = st.sidebar
 n = sb.slider("Confronta con il prezzo di quanti giorni fa", 1, 60, 7)
-mesi = sb.selectbox("Periodo mostrato nel grafico", ["1 mese", "3 mesi", "6 mesi", "1 anno", "5 anni"], index=1)
-giorni_grafico = {"1 mese": 30, "3 mesi": 91, "6 mesi": 182, "1 anno": 365, "5 anni": 1826}[mesi]
+mesi = sb.selectbox("Periodo mostrato nel grafico", ["1 mese", "3 mesi", "6 mesi", "1 anno", "5 anni", "Tutto lo storico"],
+                    index=1)
+giorni_grafico = {"1 mese": 30, "3 mesi": 91, "6 mesi": 182, "1 anno": 365, "5 anni": 1826,
+                  "Tutto lo storico": 100_000}[mesi]
 if sb.button("Aggiorna i prezzi"):
     st.cache_data.clear()
 
@@ -269,8 +273,8 @@ with tab3:
                 "°C rispetto al normale")
         grafico(base.loc[inizio_g:, ["eur"]].rename(columns={"eur": "Euro al barile"}), "Prezzo al barile")
         st.caption(
-            f"Temperatura media di {', '.join(CITTA)}. Il «normale» è la media dello stesso periodo dell'anno negli "
-            "ultimi 5 anni: sopra zero fa più caldo del solito, sotto zero più freddo. In teoria un inverno più freddo "
+            f"Temperatura media di {', '.join(CITTA)}. Il «normale» è la media dello stesso periodo dell'anno dal "
+            f"{anomalia.index[0].year} a oggi: sopra zero fa più caldo del solito, sotto zero più freddo. In teoria un inverno più freddo "
             "fa consumare più gasolio da riscaldamento e può spingere il prezzo; la scheda «Prova di previsione» "
             "verifica se succede davvero. Dati meteo: [Open-Meteo.com](https://open-meteo.com) (licenza CC BY 4.0)."
         )
@@ -279,30 +283,43 @@ with tab3:
 # Scheda 4 - Prova di previsione
 # --------------------------------------------------------------------------
 with tab4:
+    passo = 21 if freq == "Giorno per giorno" else 4  # circa un mese
     st.subheader("L'andamento passato aiuta a prevedere il prezzo?")
     st.markdown(
         f"Domanda: il prezzo in euro salirà di oltre **{soglia:.1f}%** nei prossimi **{orizzonte} {unita}**? "
-        "Il modello impara sul primo 60% dei dati (periodo di studio) e viene messo alla prova sul restante 40% "
-        "(periodo di verifica), che non ha mai visto. Il confronto è con una **stima di riferimento** che non guarda "
-        "il passato recente e dà sempre la stessa probabilità: quanto spesso il prezzo è salito nel periodo di studio."
-        + (f" Le righe con la temperatura usano la media della temperatura rispetto al normale sugli ultimi {w} {unita}."
+        "La prova procede **a finestre scorrevoli**, come se il modello fosse usato davvero nel tempo: il primo 40% "
+        f"dello storico serve solo per imparare; poi, ogni {passo} {unita} (circa un mese), il modello si riaddestra "
+        "su tutto il passato disponibile e prevede il mese successivo, che non ha mai visto. Il confronto è con una "
+        "**stima di riferimento** che non guarda il passato recente e dà sempre la stessa probabilità: quanto spesso "
+        "il prezzo è salito fino a quel momento."
+    )
+    st.markdown(
+        f"**Oscillazione (sigma e MAD)**: quanto il prezzo si è mosso negli ultimi {w} {unita}. *Sigma* è "
+        "l'oscillazione tipica; *MAD* è la stessa idea ma non si lascia influenzare da un singolo salto. Non dicono se "
+        "il prezzo salirà o scenderà, ma quanto è probabile un movimento grande: contano soprattutto quando il "
+        "«rialzo minimo da prevedere» è sopra lo 0%."
+        + (f" **Temperatura**: media della temperatura rispetto al normale sugli ultimi {w} {unita}."
            if m is not None else "")
     )
     if st.button("Esegui la prova"):
         try:
-            feat = bm.costruisci_features(x, y, w, orizzonte, meteo=m)
-            res, meta = bm.validazione(feat, orizzonte, soglia / 100)
+            with st.spinner("Eseguo la prova su tutto lo storico…"):
+                feat = bm.costruisci_features(x, y, w, orizzonte, meteo=m)
+                res, meta = bm.validazione(feat, orizzonte, soglia / 100, passo=passo,
+                                           anni=bins.index[feat["t"].to_numpy()].year)
         except Exception as e:
             st.error(str(e))
         else:
             res = res.assign(**{
                 "Insieme di predittori": res["Insieme di predittori"].map(NOMI_INSIEMI),
                 "Skill": 100 * res["Skill"],
-            }).rename(columns={
+                "Anni vinti": res["Anni vinti"].astype(str) + " su " + res["Anni"].astype(str),
+            }).drop(columns="Anni").rename(columns={
                 "Insieme di predittori": "Dati usati per prevedere",
                 "Brier": "Errore medio",
                 "Skill": "Miglioramento sul riferimento (%)",
                 "AUC": "Capacità di distinguere",
+                "Anni vinti": "Anni in cui fa meglio",
             })
             st.dataframe(
                 res, hide_index=True,
@@ -315,25 +332,29 @@ with tab4:
                     "Capacità di distinguere": st.column_config.NumberColumn(
                         format="%.3f", help="0.5 = come tirare a indovinare; 1 = distingue sempre i rialzi "
                                             "dai non-rialzi (AUC)."),
+                    "Anni in cui fa meglio": st.column_config.TextColumn(
+                        help="In quanti anni del periodo di verifica il modello sbaglia meno della stima di "
+                             "riferimento. Un modello utile vince nella maggior parte degli anni, non solo in media."),
                 },
             )
             st.caption(
-                f"Periodo di studio: {meta['n_train']} casi · periodo di verifica: {meta['n_test']} casi, di cui "
-                f"{meta['pos_test']} con rialzo · la stima di riferimento dà sempre {meta['base_rate_train']:.1%} di "
-                f"probabilità di rialzo (errore medio {meta['brier_base']:.4f}) · con così pochi casi la «capacità di "
-                f"distinguere» può scostarsi da 0.5 per puro caso fino a circa ±{2 * meta['auc_se']:.3f}"
+                f"Periodo di verifica: dal {bins.index[meta['primo_test']]:%d/%m/%Y} al "
+                f"{bins.index[meta['ultimo_test']]:%d/%m/%Y}, {meta['n_test']} casi di cui {meta['pos_test']} con "
+                f"rialzo ({meta['base_rate']:.1%}) · modello riaddestrato {meta['n_passi']} volte · errore medio della "
+                f"stima di riferimento {meta['brier_base']:.4f} · con questi casi la «capacità di distinguere» può "
+                f"scostarsi da 0.5 per puro caso fino a circa ±{2 * meta['auc_se']:.3f}"
             )
             migliore = res.loc[res["Miglioramento sul riferimento (%)"].idxmax()]
+            vinti, anni_tot = (int(v) for v in migliore["Anni in cui fa meglio"].split(" su "))
             if (res["Miglioramento sul riferimento (%)"] <= 0).all():
                 st.warning("Nessun gruppo di dati fa meglio della stima di riferimento: su questi prezzi l'andamento "
                            "recente non aiuta a prevedere quello futuro.")
-            elif migliore["Capacità di distinguere"] - 0.5 > 2 * meta["auc_se"]:
+            elif migliore["Capacità di distinguere"] - 0.5 > 2 * meta["auc_se"] and vinti > anni_tot / 2:
                 st.success(f"«{migliore['Dati usati per prevedere']}» fa meglio della stima di riferimento, più di "
-                           "quanto il caso da solo spiegherebbe. Prima di fidarti, ripeti la prova cambiando periodo "
-                           "e orizzonte.")
+                           f"quanto il caso da solo spiegherebbe, e ci riesce in {vinti} anni su {anni_tot}.")
             else:
-                st.info("Qualche gruppo di dati fa un po' meglio della stima di riferimento, ma di poco: con così "
-                        "pochi casi potrebbe essere fortuna, non una vera capacità di previsione.")
+                st.info("Qualche gruppo di dati fa un po' meglio della stima di riferimento, ma di poco o solo in "
+                        "alcuni anni: potrebbe essere fortuna, non una vera capacità di previsione.")
     st.caption(
         "Attenzione: i periodi vicini si sovrappongono (il rialzo dei prossimi giorni è in gran parte lo stesso per "
         f"oggi e per domani), quindi i casi davvero indipendenti sono circa uno ogni {orizzonte} {unita}. "

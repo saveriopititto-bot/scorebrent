@@ -6,7 +6,7 @@ App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent d
 
 L'app ha quattro schede.
 
-- **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a 5 anni).
+- **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
 - **Andamento**: di quanto il prezzo è salito o sceso in ogni giorno o settimana, con un riepilogo:
   - movimento complessivo, variazione tipica, salita e discesa più grandi;
   - quanto è stato lineare l'andamento;
@@ -14,10 +14,11 @@ L'app ha quattro schede.
   - un indice che dice se si muove prima il prezzo o l'agitazione del mercato (l'«area di Lévy»).
 - **Meteo**: quanto fa più caldo o più freddo del normale in Europa, con il grafico accanto a quello del prezzo.
   - La temperatura è la media giornaliera di Berlino, Parigi, Londra, Milano e Madrid.
-  - Il «normale» è la media dello stesso periodo dell'anno negli ultimi 5 anni.
+  - Il «normale» è la media dello stesso periodo dell'anno su tutti gli anni disponibili.
 - **Prova di previsione**: controlla se l'andamento passato aiuta davvero a prevedere un rialzo nei giorni o nelle settimane successive.
-  - Il modello impara sul primo 60% dei dati e viene verificato sul restante 40%.
-  - Il risultato è confrontato con una stima di riferimento che non guarda il passato recente.
+  - La prova procede a finestre scorrevoli su tutto lo storico. Il primo 40% serve solo per imparare; poi, ogni mese circa, il modello si riaddestra su tutto il passato e prevede il mese successivo.
+  - Il risultato è confrontato con una stima di riferimento che non guarda il passato recente. Per ogni gruppo di dati si vede anche in quanti anni fa meglio del riferimento.
+  - Fra i dati usati per prevedere c'è l'oscillazione recente del prezzo: *sigma* (deviazione standard) e *MAD* (deviazione assoluta mediana, meno sensibile ai salti isolati). Contano soprattutto quando si chiede un rialzo minimo sopra lo 0%.
   - Se la temperatura è attiva, la prova include anche due gruppi di dati con la temperatura rispetto al normale.
 
 Le impostazioni dell'analisi sono nella barra laterale: raggruppamento per giorni o settimane, periodo analizzato, finestra mobile, orizzonte, soglia di rialzo e uso della temperatura.
@@ -41,13 +42,13 @@ L'app si apre nel browser all'indirizzo http://localhost:8501. Deve poter raggiu
 | File | Contenuto |
 |---|---|
 | `app.py` | L'interfaccia: download di prezzi e temperature, schede, grafici e testi. |
-| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, temperatura rispetto al normale, regressione logistica e prova fuori campione. Non dipende da Streamlit. |
+| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica e prova a finestre scorrevoli. Non dipende da Streamlit. |
 | `requirements.txt` | Le librerie Python necessarie. |
 | `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
 
 ## Dati e avvertenze
 
-- **Fonti**: contratto future sul Brent `BZ=F` (dollari al barile) e cambio `EURUSD=X`, scaricati con [yfinance](https://github.com/ranaroussi/yfinance) e aggiornati al massimo ogni 15 minuti.
+- **Fonti**: contratto future sul Brent `BZ=F` (dollari al barile) e cambio `EURUSD=X`, scaricati con [yfinance](https://github.com/ranaroussi/yfinance) per tutto lo storico disponibile e aggiornati al massimo ogni 15 minuti.
 - **Meteo**: temperatura media giornaliera da [Open-Meteo.com](https://open-meteo.com), licenza CC BY 4.0, aggiornata al massimo ogni 6 ore. Lo storico arriva con qualche giorno di ritardo: gli ultimi giorni vengono dalle previsioni. L'API gratuita di Open-Meteo è per uso non commerciale.
 - **Salti fra contratti**: `BZ=F` è un contratto con scadenza mensile. Il passaggio da un contratto al successivo produce piccoli salti che non sono veri movimenti del mercato.
 - **Previsioni**: i periodi vicini si sovrappongono, quindi i casi davvero indipendenti nella prova di previsione sono meno di quanti sembrano.

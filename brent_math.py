@@ -115,16 +115,21 @@ INSIEMI = {
     "Livello 1 (dx, dy)": ["dx", "dy"],
     "+ coseno": ["dx", "dy", "cos"],
     "+ area di Lévy": ["dx", "dy", "levy"],
-    "Tutto": ["dx", "dy", "cos", "levy"],
+    "+ oscillazione": ["dx", "dy", "sigma", "mad"],
+    "Tutto": ["dx", "dy", "cos", "levy", "sigma", "mad"],
     "+ meteo": ["dx", "dy", "meteo"],
-    "Tutto + meteo": ["dx", "dy", "cos", "levy", "meteo"],
+    "Tutto + meteo": ["dx", "dy", "cos", "levy", "sigma", "mad", "meteo"],
 }
 
 
 def costruisci_features(x, y, w: int, orizzonte: int, meteo=None) -> pd.DataFrame:
     """Per ogni istante t (fine finestra): incrementi grezzi dx, dy sulla
-    finestra, coseno (correlazione degli incrementi = parte simmetrica) e area
-    di Lévy normalizzata (parte antisimmetrica). `fwd` = x[t+orizzonte] - x[t].
+    finestra, coseno (correlazione degli incrementi = parte simmetrica), area
+    di Lévy normalizzata (parte antisimmetrica) e oscillazione degli incrementi
+    di x: `sigma` = ln(deviazione standard) e `mad` = ln(deviazione assoluta
+    mediana dalla mediana), meno sensibile ai salti isolati. In scala
+    logaritmica perche' la volatilita' e' asimmetrica (molti periodi calmi,
+    pochi molto agitati). `fwd` = x[t+orizzonte] - x[t].
 
     Con `meteo` (anomalia di temperatura allineata a x) aggiunge la colonna
     `meteo`, media dell'anomalia sugli ultimi w bin; le righe con meno di meta'
@@ -139,15 +144,17 @@ def costruisci_features(x, y, w: int, orizzonte: int, meteo=None) -> pd.DataFram
         sx, sy = dx.std(ddof=1), dy.std(ddof=1)
         if sx == 0 or sy == 0:
             continue
+        mad = float(np.median(np.abs(dx - np.median(dx))))
         riga = (t, xs[-1] - xs[0], ys[-1] - ys[0], float(np.corrcoef(dx, dy)[0, 1]),
-                area_levy(xs, ys) / (w * sx * sy), x[t + orizzonte] - x[t])
+                area_levy(xs, ys) / (w * sx * sy), np.log(sx), np.log(max(mad, 1e-4 * sx)),
+                x[t + orizzonte] - x[t])
         if m is not None:
             ms = m[t - w + 1 : t + 1]
             if np.isfinite(ms).sum() < w / 2:
                 continue
             riga += (float(np.nanmean(ms)),)
         rows.append(riga)
-    cols = ["t", "dx", "dy", "cos", "levy", "fwd"] + ([] if m is None else ["meteo"])
+    cols = ["t", "dx", "dy", "cos", "levy", "sigma", "mad", "fwd"] + ([] if m is None else ["meteo"])
     return pd.DataFrame(rows, columns=cols)
 
 
@@ -187,46 +194,72 @@ def auc(y, s) -> float:
     return float((r[y == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * n0))
 
 
-def validazione(feat: pd.DataFrame, orizzonte: int, soglia: float = 0.0,
-                train_frac: float = 0.6, lam: float = 1.0):
-    """Split temporale (nessun rimescolamento) 60/40 con scarto di `orizzonte`
-    righe in fondo al training, per non far filtrare nel training il futuro dei
-    bersagli sovrapposti. Confronto con la baseline a frequenza costante:
-    skill = 1 - Brier_modello / Brier_baseline.
+def validazione(feat: pd.DataFrame, orizzonte: int, soglia: float = 0.0, passo: int = 21,
+                inizio_frac: float = 0.4, lam: float = 1.0, anni=None):
+    """Prova a finestre scorrevoli (walk-forward): il primo `inizio_frac` dei
+    casi serve solo per imparare; poi, a blocchi di `passo` casi, il modello
+    viene riaddestrato su tutto il passato e prevede il blocco successivo.
+    Dal training si escludono i casi il cui bersaglio (che guarda `orizzonte`
+    bin avanti) finisce dopo l'inizio del blocco, per non usare il futuro.
 
-    Restituisce (tabella per insieme di predittori, meta). `auc_se` e' l'errore
-    standard dell'AUC sotto ipotesi nulla, calcolato sui casi *effettivi*
-    (n / orizzonte), perche' i bersagli di giorni vicini si sovrappongono."""
+    La baseline e' la frequenza dei rialzi nel training di ogni blocco;
+    skill = 1 - Brier_modello / Brier_baseline su tutte le previsioni.
+
+    Restituisce (tabella per insieme di predittori, meta). Con `anni` (anno di
+    ogni riga di `feat`) la tabella conta anche in quanti anni il modello batte
+    la baseline. `auc_se` e' l'errore standard dell'AUC sotto ipotesi nulla sui
+    casi *effettivi* (n / orizzonte), perche' i bersagli vicini si sovrappongono."""
     f = feat.reset_index(drop=True)
     n = len(f)
-    if n < 60:
-        raise ValueError(f"Troppo pochi dati per la validazione ({n} osservazioni utili, ne servono almeno 60).")
-    ntr = int(n * train_frac)
-    tr, te = f.iloc[: max(ntr - orizzonte, 1)], f.iloc[ntr:]
-    ytr = (tr.fwd > soglia).astype(float).values
-    yte = (te.fwd > soglia).astype(float).values
-    if ytr.min() == ytr.max() or yte.min() == yte.max():
-        raise ValueError("Il bersaglio ha una sola classe nel training o nel test: cambia soglia o orizzonte.")
-
-    p0 = float(ytr.mean())
-    brier_base = float(np.mean((p0 - yte) ** 2))
-    rows = []
-    for nome, cols in INSIEMI.items():
-        if not set(cols) <= set(f.columns):
+    if n < 100:
+        raise ValueError(f"Troppo pochi dati per la prova ({n} casi utili, ne servono almeno 100).")
+    ybin = (f.fwd > soglia).astype(float).values
+    if ybin.min() == ybin.max():
+        raise ValueError("Il prezzo sale sempre (o non sale mai) oltre la soglia: cambia soglia o orizzonte.")
+    insiemi = {nome: cols for nome, cols in INSIEMI.items() if set(cols) <= set(f.columns)}
+    p0 = np.full(n, np.nan)
+    prev = {nome: np.full(n, np.nan) for nome in insiemi}
+    n_passi = 0
+    for a in range(int(n * inizio_frac), n, passo):
+        b = min(a + passo, n)
+        tr = (f.t + orizzonte <= f.t.iloc[a]).values
+        ytr = ybin[tr]
+        if len(ytr) < 30:
             continue
-        Xtr, Xte = tr[cols].values, te[cols].values
-        mu, sd = Xtr.mean(0), Xtr.std(0)
-        sd[sd == 0] = 1.0
-        p = _predici(_fit_logistica((Xtr - mu) / sd, ytr, lam), (Xte - mu) / sd)
-        br = float(np.mean((p - yte) ** 2))
-        rows.append({"Insieme di predittori": nome, "Brier": br, "Skill": 1 - br / brier_base, "AUC": auc(yte, p)})
+        n_passi += 1
+        p0[a:b] = ytr.mean()
+        for nome, cols in insiemi.items():
+            if ytr.min() == ytr.max():
+                prev[nome][a:b] = ytr.mean()
+                continue
+            Xtr, Xte = f.loc[tr, cols].values, f.loc[a : b - 1, cols].values
+            mu, sd = Xtr.mean(0), Xtr.std(0)
+            sd[sd == 0] = 1.0
+            prev[nome][a:b] = _predici(_fit_logistica((Xtr - mu) / sd, ytr, lam), (Xte - mu) / sd)
+
+    te = np.isfinite(p0)
+    yte = ybin[te]
+    if len(yte) == 0 or yte.min() == yte.max():
+        raise ValueError("Nel periodo di verifica il bersaglio ha una sola classe: cambia soglia o orizzonte.")
+    brier_base = float(np.mean((p0[te] - yte) ** 2))
+    anni_te = None if anni is None else np.asarray(anni)[te]
+    rows = []
+    for nome, p in prev.items():
+        br = float(np.mean((p[te] - yte) ** 2))
+        riga = {"Insieme di predittori": nome, "Brier": br, "Skill": 1 - br / brier_base, "AUC": auc(yte, p[te])}
+        if anni_te is not None:
+            vinti = [np.mean((p[te][anni_te == k] - yte[anni_te == k]) ** 2)
+                     < np.mean((p0[te][anni_te == k] - yte[anni_te == k]) ** 2) for k in np.unique(anni_te)]
+            riga["Anni vinti"], riga["Anni"] = int(sum(vinti)), len(vinti)
+        rows.append(riga)
 
     n1, n0 = float(yte.sum()), float(len(yte) - yte.sum())
     h = max(orizzonte, 1)
     n1e, n0e = max(n1 / h, 1.0), max(n0 / h, 1.0)
     meta = {
-        "n_train": len(tr), "n_test": len(te), "pos_test": int(n1),
-        "base_rate_train": p0, "brier_base": brier_base,
+        "n_test": int(te.sum()), "pos_test": int(n1), "n_passi": n_passi,
+        "primo_test": int(f.t[te].iloc[0]), "ultimo_test": int(f.t[te].iloc[-1]),
+        "base_rate": float(yte.mean()), "brier_base": brier_base,
         "auc_se": float(np.sqrt((n1e + n0e + 1) / (12 * n1e * n0e))),
     }
     return pd.DataFrame(rows), meta
