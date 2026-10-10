@@ -4,7 +4,7 @@ App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent d
 
 ## Cosa mostra
 
-L'app ha quattro schede.
+L'app ha cinque schede.
 
 - **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
 - **Andamento**: di quanto il prezzo è salito o sceso in ogni giorno o settimana, con un riepilogo:
@@ -20,6 +20,10 @@ L'app ha quattro schede.
   - Il risultato è confrontato con una stima di riferimento che non guarda il passato recente. Per ogni gruppo di dati si vede anche in quanti anni fa meglio del riferimento.
   - Fra i dati usati per prevedere c'è l'oscillazione recente del prezzo: *sigma* (deviazione standard) e *MAD* (deviazione assoluta mediana, meno sensibile ai salti isolati). Contano soprattutto quando si chiede un rialzo minimo sopra lo 0%.
   - Se la temperatura è attiva, la prova include anche due gruppi di dati con la temperatura rispetto al normale.
+- **Oscillazione attesa**: quanto si muoverà il prezzo nei prossimi giorni o settimane, in % e in euro al barile. Prevedere quanto si muove è molto più fattibile che prevedere in che direzione, perché i periodi agitati tendono a durare.
+  - Il modello è una regressione sul logaritmo dell'oscillazione, che usa sigma e MAD recenti (su 5 periodi e sulla finestra mobile) e l'agitazione, cioè la distanza fra massimo e minimo.
+  - La prova a finestre scorrevoli lo confronta con due riferimenti: «come nel periodo appena passato» e «media storica».
+  - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
 
 Le impostazioni dell'analisi sono nella barra laterale: raggruppamento per giorni o settimane, periodo analizzato, finestra mobile, orizzonte, soglia di rialzo e uso della temperatura.
 
@@ -42,7 +46,7 @@ L'app si apre nel browser all'indirizzo http://localhost:8501. Deve poter raggiu
 | File | Contenuto |
 |---|---|
 | `app.py` | L'interfaccia: download di prezzi e temperature, schede, grafici e testi. |
-| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica e prova a finestre scorrevoli. Non dipende da Streamlit. |
+| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione e prova a finestre scorrevoli. Non dipende da Streamlit. |
 | `requirements.txt` | Le librerie Python necessarie. |
 | `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
 

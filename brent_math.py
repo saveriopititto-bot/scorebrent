@@ -263,3 +263,133 @@ def validazione(feat: pd.DataFrame, orizzonte: int, soglia: float = 0.0, passo: 
         "auc_se": float(np.sqrt((n1e + n0e + 1) / (12 * n1e * n0e))),
     }
     return pd.DataFrame(rows), meta
+
+
+# --------------------------------------------------------------------------
+# Previsione dell'oscillazione
+# --------------------------------------------------------------------------
+# Bersaglio: oscillazione realizzata nei prossimi `orizzonte` bin, cioe' la
+# radice della media dei quadrati degli incrementi di x (rendimenti
+# logaritmici). Si prevede il suo logaritmo con una regressione ridge, in stile
+# HAR: oscillazione su una finestra breve e una lunga, piu' l'agitazione
+# (escursione fra massimo e minimo), che ne e' una misura meno rumorosa.
+INSIEMI_OSC = {
+    "Oscillazione recente": ["s_breve", "s_lungo", "mad"],
+    "+ agitazione": ["s_breve", "s_lungo", "mad", "agit"],
+    "+ agitazione e meteo": ["s_breve", "s_lungo", "mad", "agit", "meteo"],
+}
+_PAVIMENTO = 1e-6  # evita ln(0) nei periodi senza movimento
+
+
+def costruisci_features_oscillazione(x, y, w: int, orizzonte: int, meteo=None, breve: int = 5) -> pd.DataFrame:
+    """Una riga per ogni t >= w. Predittori (logaritmi): `s_breve` e `s_lungo`
+    = RMS degli incrementi negli ultimi `breve` e w bin, `mad` = deviazione
+    assoluta mediana sugli ultimi w; `agit` = media di y sugli ultimi `breve`
+    bin; `meteo` (opzionale) = media dell'anomalia sugli ultimi w bin.
+    `bersaglio` = ln RMS degli incrementi nei prossimi `orizzonte` bin, NaN
+    dove il futuro non e' ancora noto (servono per la previsione di oggi)."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    r = np.r_[np.nan, np.diff(x)]
+    m = None if meteo is None else np.asarray(meteo, float)
+    breve = min(breve, w)
+    rows = []
+    for t in range(w, len(x)):
+        rl, rb = r[t - w + 1 : t + 1], r[t - breve + 1 : t + 1]
+        riga = {
+            "t": t,
+            "s_breve": np.log(max(np.sqrt(np.mean(rb**2)), _PAVIMENTO)),
+            "s_lungo": np.log(max(np.sqrt(np.mean(rl**2)), _PAVIMENTO)),
+            "mad": np.log(max(float(np.median(np.abs(rl - np.median(rl)))), _PAVIMENTO)),
+            "agit": float(np.mean(y[t - breve + 1 : t + 1])),
+            "bersaglio": (np.log(max(np.sqrt(np.mean(r[t + 1 : t + orizzonte + 1] ** 2)), _PAVIMENTO))
+                          if t + orizzonte < len(x) else np.nan),
+        }
+        if m is not None:
+            ms = m[t - w + 1 : t + 1]
+            riga["meteo"] = float(np.nanmean(ms)) if np.isfinite(ms).sum() >= w / 2 else np.nan
+        rows.append(riga)
+    return pd.DataFrame(rows)
+
+
+def _fit_ridge(X, y, lam: float = 1.0):
+    """Ridge su predittori standardizzati (intercetta non penalizzata).
+    Restituisce (funzione di previsione, varianza dei residui)."""
+    mu, sd = X.mean(0), X.std(0)
+    sd[sd == 0] = 1.0
+    Z = np.c_[np.ones(len(X)), (X - mu) / sd]
+    R = lam * np.eye(Z.shape[1])
+    R[0, 0] = 0.0
+    beta = np.linalg.solve(Z.T @ Z + R, Z.T @ y)
+    var_res = float(np.var(y - Z @ beta))
+    return (lambda Xn: np.c_[np.ones(len(Xn)), (Xn - mu) / sd] @ beta), var_res
+
+
+
+def prevedi_oscillazione(feat: pd.DataFrame, cols: list[str], lam: float = 1.0) -> float:
+    """Oscillazione attesa (frazione per bin) dopo l'ultima riga, imparando
+    da tutte le righe con bersaglio noto. Il fattore exp(var/2) corregge la
+    sottostima che nasce dal tornare dal logaritmo alla scala normale."""
+    f = feat.dropna(subset=cols)
+    tr = f[f.bersaglio.notna()]
+    if len(tr) < 30:
+        raise ValueError("Troppo pochi dati per prevedere l'oscillazione.")
+    pred, var = _fit_ridge(tr[cols].values, tr.bersaglio.values, lam)
+    return float(np.exp(pred(f[cols].values[-1:])[0] + var / 2))
+
+
+def valida_oscillazione(feat: pd.DataFrame, orizzonte: int, passo: int = 21, inizio_frac: float = 0.4,
+                        lam: float = 1.0, anni=None):
+    """Prova a finestre scorrevoli come `validazione`, ma per l'oscillazione.
+
+    Due riferimenti ingenui: «come appena passato» (prevede l'oscillazione
+    degli ultimi w bin, s_lungo) e «media storica» (media del bersaglio nel
+    training). Gli errori sono in punti percentuali di oscillazione per bin:
+    bias = errore medio (positivo = sovrastima), MAD = errore assoluto medio,
+    sigma = deviazione standard dell'errore. Il miglioramento e gli anni vinti
+    sono misurati contro «come appena passato», il riferimento piu' difficile.
+
+    Restituisce (tabella, serie con reale e previsioni per riga di test, meta)."""
+    cols_tutte = sorted({c for cols in INSIEMI_OSC.values() for c in cols} & set(feat.columns))
+    f = feat.dropna(subset=["bersaglio"] + cols_tutte).reset_index(drop=True)
+    n = len(f)
+    if n < 100:
+        raise ValueError(f"Troppo pochi dati per la prova ({n} casi utili, ne servono almeno 100).")
+    insiemi = {nome: cols for nome, cols in INSIEMI_OSC.items() if set(cols) <= set(f.columns)}
+    prev = {nome: np.full(n, np.nan) for nome in insiemi}
+    prev["Come appena passato"] = np.exp(f.s_lungo.values)
+    prev["Media storica"] = np.full(n, np.nan)
+    te = np.zeros(n, bool)
+    n_passi = 0
+    for a in range(int(n * inizio_frac), n, passo):
+        b = min(a + passo, n)
+        tr = (f.t + orizzonte <= f.t.iloc[a]).values
+        if tr.sum() < 30:
+            continue
+        n_passi += 1
+        te[a:b] = True
+        ytr = f.bersaglio.values[tr]
+        prev["Media storica"][a:b] = np.exp(ytr.mean() + ytr.var() / 2)
+        for nome, cols in insiemi.items():
+            pred, var = _fit_ridge(f.loc[tr, cols].values, ytr, lam)
+            prev[nome][a:b] = np.exp(pred(f.loc[a : b - 1, cols].values) + var / 2)
+    if not te.any():
+        raise ValueError("Troppo pochi dati per la prova.")
+
+    reale = 100 * np.exp(f.bersaglio.values[te])
+    prev = {nome: 100 * p[te] for nome, p in prev.items()}
+    mse_rif = np.mean((prev["Come appena passato"] - reale) ** 2)
+    anni_te = None if anni is None else np.asarray(anni)[f.t.values[te]]
+    rows = []
+    for nome, p in prev.items():
+        e = p - reale
+        riga = {"Previsione": nome, "Bias": float(e.mean()), "MAD": float(np.abs(e).mean()),
+                "Sigma": float(e.std()), "Miglioramento": float(1 - np.mean(e**2) / mse_rif)}
+        if anni_te is not None:
+            vinti = [np.mean(e[anni_te == k] ** 2) < np.mean((prev["Come appena passato"] - reale)[anni_te == k] ** 2)
+                     for k in np.unique(anni_te)]
+            riga["Anni vinti"], riga["Anni"] = int(sum(vinti)), len(vinti)
+        rows.append(riga)
+    serie = pd.DataFrame({"t": f.t.values[te], "Reale": reale, **prev})
+    meta = {"n_test": int(te.sum()), "n_passi": n_passi,
+            "primo_test": int(f.t.values[te][0]), "ultimo_test": int(f.t.values[te][-1])}
+    return pd.DataFrame(rows), serie, meta

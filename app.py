@@ -16,6 +16,15 @@ st.title("🛢️ Prezzo del petrolio (Brent)")
 BRENT = "BZ=F"        # Brent Crude Oil Futures (USD/barile)
 EURUSD = "EURUSD=X"   # dollari per 1 euro
 
+# Nomi comprensibili per le previsioni dell'oscillazione (chiavi di bm.INSIEMI_OSC più i due riferimenti).
+NOMI_OSC = {
+    "Oscillazione recente": "Modello: oscillazione recente (sigma e MAD)",
+    "+ agitazione": "Modello: + agitazione (massimo − minimo)",
+    "+ agitazione e meteo": "Modello: + agitazione e temperatura",
+    "Come appena passato": "Riferimento: come nel periodo appena passato",
+    "Media storica": "Riferimento: media storica",
+}
+
 # Nomi comprensibili per i gruppi di dati usati nella prova di previsione (chiavi di bm.INSIEMI).
 NOMI_INSIEMI = {
     "Livello 1 (dx, dy)": "Solo le variazioni recenti",
@@ -166,7 +175,7 @@ if usa_meteo:
     except Exception as e:
         errore_meteo = str(e)
 
-tab1, tab2, tab3, tab4 = st.tabs(["Prezzo", "Andamento", "Meteo", "Prova di previsione"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Prezzo", "Andamento", "Meteo", "Prova di previsione", "Oscillazione attesa"])
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
@@ -361,3 +370,90 @@ with tab4:
         "Inoltre il Brent quotato è un contratto con scadenza mensile: quando si passa da un contratto al "
         "successivo il prezzo fa piccoli salti che non sono veri movimenti del mercato."
     )
+
+# --------------------------------------------------------------------------
+# Scheda 5 - Oscillazione attesa
+# --------------------------------------------------------------------------
+with tab5:
+    passo = 21 if freq == "Giorno per giorno" else 4  # circa un mese
+    al_periodo = "al giorno" if freq == "Giorno per giorno" else "alla settimana"
+    st.subheader(f"Quanto si muoverà il prezzo nei prossimi {orizzonte} {unita}?")
+    st.markdown(
+        "Prevedere se il prezzo salirà o scenderà è quasi impossibile; prevedere **quanto si muoverà** è molto più "
+        "fattibile, perché i periodi agitati tendono a durare. Il modello usa l'oscillazione recente (*sigma* e *MAD*, "
+        f"sugli ultimi {w} {unita} e sugli ultimi 5) e l'agitazione, cioè la distanza fra massimo e minimo."
+    )
+    feat_osc = bm.costruisci_features_oscillazione(x, y, w, orizzonte, meteo=m)
+    try:
+        cols_oggi = bm.INSIEMI_OSC["+ agitazione"]
+        attesa = 100 * bm.prevedi_oscillazione(feat_osc, cols_oggi)
+    except Exception as e:
+        st.error(str(e))
+    else:
+        normale = 100 * float(np.exp(feat_osc["bersaglio"].median()))
+        escursione = attesa * np.sqrt(orizzonte)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Oscillazione attesa", f"{attesa:.2f}% {al_periodo}",
+                  f"{attesa - normale:+.2f} punti rispetto al normale", delta_color="inverse",
+                  help=f"Il normale è l'oscillazione tipica (mediana) di tutto lo storico: {normale:.2f}% {al_periodo}.")
+        c2.metric(f"Movimento probabile in {orizzonte} {unita}", f"±{escursione:.1f}%",
+                  help="In circa 2 casi su 3 la variazione complessiva del prezzo resta dentro questo intervallo; "
+                       "nel restante terzo va oltre, in su o in giù.")
+        c3.metric("In euro al barile", f"±{ora['eur'] * escursione / 100:.2f} €",
+                  help=f"Lo stesso intervallo applicato al prezzo attuale di {ora['eur']:.2f} € al barile.")
+
+    st.markdown("**Quanto è affidabile?** La prova usa le stesse finestre scorrevoli della scheda «Prova di "
+                "previsione» e confronta il modello con due riferimenti semplici.")
+    if st.button("Esegui la prova dell'oscillazione"):
+        try:
+            with st.spinner("Eseguo la prova su tutto lo storico…"):
+                res_o, serie_o, meta_o = bm.valida_oscillazione(feat_osc, orizzonte, passo=passo,
+                                                                anni=bins.index.year)
+        except Exception as e:
+            st.error(str(e))
+        else:
+            tab_o = res_o.assign(**{
+                "Previsione": res_o["Previsione"].map(NOMI_OSC),
+                "Miglioramento": 100 * res_o["Miglioramento"],
+                "Anni vinti": res_o["Anni vinti"].astype(str) + " su " + res_o["Anni"].astype(str),
+            }).drop(columns="Anni").rename(columns={
+                "Bias": "Bias", "MAD": "MAD", "Sigma": "Sigma",
+                "Miglioramento": "Miglioramento (%)", "Anni vinti": "Anni in cui fa meglio",
+            })
+            st.dataframe(
+                tab_o, hide_index=True,
+                column_config={
+                    "Bias": st.column_config.NumberColumn(
+                        format="%+.3f", help="Errore medio, in punti percentuali. Positivo: in media prevede più oscillazione di "
+                                             "quella vera; negativo: meno. Vicino a zero è meglio."),
+                    "MAD": st.column_config.NumberColumn(
+                        format="%.3f", help="Errore assoluto medio: di quanto sbaglia in media, in punti percentuali, senza guardare il "
+                                            "segno. Più è basso meglio è."),
+                    "Sigma": st.column_config.NumberColumn(
+                        format="%.3f", help="Deviazione standard dell'errore: quanto variano gli errori: più è basso, più la previsione è costante."),
+                    "Miglioramento (%)": st.column_config.NumberColumn(
+                        format="%+.1f", help="Rispetto a «come nel periodo appena passato»: positivo vuol dire che "
+                                             "sbaglia meno (errore quadratico medio)."),
+                    "Anni in cui fa meglio": st.column_config.TextColumn(
+                        help="In quanti anni sbaglia meno di «come nel periodo appena passato»."),
+                },
+            )
+            st.caption(
+                f"Periodo di verifica: dal {bins.index[meta_o['primo_test']]:%d/%m/%Y} al "
+                f"{bins.index[meta_o['ultimo_test']]:%d/%m/%Y}, {meta_o['n_test']} casi · modello riaddestrato "
+                f"{meta_o['n_passi']} volte · oscillazione misurata in % {al_periodo}."
+            )
+            modelli = res_o[res_o["Previsione"].isin(bm.INSIEMI_OSC)]
+            migliore = modelli.loc[modelli["Miglioramento"].idxmax()]
+            if migliore["Miglioramento"] > 0 and migliore["Anni vinti"] > migliore["Anni"] / 2:
+                st.success(f"«{NOMI_OSC[migliore['Previsione']]}» sbaglia meno del periodo appena passato del "
+                           f"{100 * migliore['Miglioramento']:.0f}% e ci riesce in {migliore['Anni vinti']} anni su "
+                           f"{migliore['Anni']}.")
+            else:
+                st.info("Il modello non fa meglio, in modo costante, che ripetere l'oscillazione del periodo appena "
+                        "passato.")
+            nome_m = migliore["Previsione"]
+            grafico(serie_o.assign(Data=bins.index[serie_o["t"]]).set_index("Data")[["Reale", nome_m]]
+                    .rename(columns={"Reale": "Oscillazione vera", nome_m: "Prevista"})
+                    .rolling(passo, min_periods=1).mean(), f"% {al_periodo}")
+            st.caption(f"Oscillazione vera e prevista nel periodo di verifica (media mobile su {passo} {unita}).")
