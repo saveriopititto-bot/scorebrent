@@ -25,7 +25,43 @@ L'app ha cinque schede.
   - La prova a finestre scorrevoli lo confronta con due riferimenti: «come nel periodo appena passato» e «media storica».
   - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
 
-Le impostazioni dell'analisi sono nella barra laterale: raggruppamento per giorni o settimane, periodo analizzato, finestra mobile, orizzonte, soglia di rialzo e uso della temperatura.
+## Impostazioni
+
+Sono tutte nella barra laterale.
+
+| Impostazione | Cosa fa | Schede |
+|---|---|---|
+| Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
+| Periodo mostrato nel grafico | Da 1 mese a tutto lo storico | Prezzo, Meteo |
+| Aggiorna i prezzi | Riscarica prezzi e temperature invece di usare quelli in memoria | Tutte |
+| Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |
+| Quanti giorni/settimane analizzare | Quanti periodi recenti mostrare nei grafici e nel riepilogo | Andamento |
+| Ampiezza della finestra mobile | Quanti periodi si guardano insieme per calcolare sigma, MAD, «chi anticipa chi» e la temperatura media | Andamento, Prova di previsione, Oscillazione attesa |
+| Quanto avanti prevedere | L'orizzonte della previsione | Prova di previsione, Oscillazione attesa |
+| Rialzo minimo da prevedere | 0% = basta che il prezzo salga; 2% = deve salire di più del 2% | Prova di previsione |
+| Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
+
+## Come leggere i risultati
+
+**Prova di previsione** (il prezzo salirà?)
+
+- *Miglioramento sul riferimento*: positivo vuol dire che il modello sbaglia meno della stima che dà sempre la stessa probabilità.
+- *Capacità di distinguere*: 0.5 è come tirare a indovinare, 1 è perfetto. Sotto la tabella c'è il margine dentro cui può variare per puro caso.
+- *Anni in cui fa meglio*: un modello utile vince nella maggior parte degli anni, non solo in media.
+- Con rialzo minimo 0% è normale che nessun gruppo batta il riferimento: la direzione del prezzo dal solo passato è quasi imprevedibile. Con una soglia sopra lo 0% contano di più sigma e MAD.
+
+**Oscillazione attesa** (quanto si muoverà il prezzo?)
+
+- *Oscillazione attesa*: movimento tipico previsto per ogni giorno o settimana. Se è sopra il normale, il mercato è più agitato del solito.
+- *Movimento probabile*: in circa 2 casi su 3 la variazione complessiva resta dentro questo intervallo.
+- Nella prova, *bias* vicino a zero vuol dire che il modello non sovrastima né sottostima. *MAD* e *sigma* più bassi vogliono dire errori più piccoli e più costanti. *Miglioramento* e *anni in cui fa meglio* sono misurati contro «come nel periodo appena passato», il riferimento più difficile da battere.
+
+## Metodo in breve
+
+- **Prova a finestre scorrevoli**: entrambe le prove imparano sul primo 40% dello storico. Poi, ogni 21 giorni (o 4 settimane), si riaddestrano su tutto il passato e prevedono il blocco successivo. Dal periodo di studio si escludono i casi il cui esito non era ancora noto all'inizio del blocco, così il modello non vede mai il futuro.
+- **Previsione del rialzo**: regressione logistica con penalità ridge sui dati della finestra mobile, cioè variazione di prezzo e agitazione, legame fra i due, area di Lévy, sigma, MAD e temperatura.
+- **Previsione dell'oscillazione**: regressione ridge sul logaritmo dell'oscillazione dei prossimi periodi, con una correzione per non sottostimarla tornando dalla scala logaritmica. La previsione mostrata in alto nella scheda usa il modello «+ agitazione».
+- **Temperatura rispetto al normale**: il normale è la media dello stesso giorno dell'anno su tutti gli anni disponibili, smussata su 31 giorni.
 
 ## Avvio
 
@@ -53,7 +89,7 @@ L'app si apre nel browser all'indirizzo http://localhost:8501. Deve poter raggiu
 ## Dati e avvertenze
 
 - **Fonti**: contratto future sul Brent `BZ=F` (dollari al barile) e cambio `EURUSD=X`, scaricati con [yfinance](https://github.com/ranaroussi/yfinance) per tutto lo storico disponibile e aggiornati al massimo ogni 15 minuti.
-- **Meteo**: temperatura media giornaliera da [Open-Meteo.com](https://open-meteo.com), licenza CC BY 4.0, aggiornata al massimo ogni 6 ore. Lo storico arriva con qualche giorno di ritardo: gli ultimi giorni vengono dalle previsioni. L'API gratuita di Open-Meteo è per uso non commerciale.
+- **Meteo**: temperatura media giornaliera da [Open-Meteo.com](https://open-meteo.com), licenza CC BY 4.0, aggiornata al massimo ogni 6 ore. Lo storico arriva con qualche giorno di ritardo: gli ultimi giorni vengono dalle previsioni. L'API gratuita di Open-Meteo è per uso non commerciale e ha limiti di richieste. Se la scheda Meteo mostra un avviso, l'app continua senza temperatura.
 - **Salti fra contratti**: `BZ=F` è un contratto con scadenza mensile. Il passaggio da un contratto al successivo produce piccoli salti che non sono veri movimenti del mercato.
 - **Previsioni**: i periodi vicini si sovrappongono, quindi i casi davvero indipendenti nella prova di previsione sono meno di quanti sembrano.
 - **Uso**: i dati possono arrivare in ritardo. L'app ha scopo di analisi e non è un consiglio di investimento.
