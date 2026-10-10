@@ -16,6 +16,8 @@ Corrispondenze con il paper
 |                                        | normale stagionale (Open-Meteo), opzionale |
 | (nessuno)                              | o_k = volatilita' attesa dal mercato delle |
 |                                        | opzioni sul petrolio (OVX), opzionale      |
+| (nessuno)                              | g_k = rischio geopolitico (GPR di Caldara  |
+|                                        | e Iacoviello), opzionale                   |
 
 Convenzione di segno dell'area di Lévy (eq. 6 del paper), con cammino
 (x, y) = (prezzo, attivita'): A > 0 se il cammino ruota in senso antiorario,
@@ -121,9 +123,10 @@ INSIEMI = {
     "+ oscillazione": ["dx", "dy", "sigma", "mad"],
     "+ meteo": ["dx", "dy", "meteo"],
     "+ OVX": ["dx", "dy", "ovx"],
+    "+ GPR": ["dx", "dy", "gpr"],
     "Tutto": None,
 }
-PREDITTORI = ["dx", "dy", "cos", "levy", "sigma", "mad", "meteo", "ovx"]
+PREDITTORI = ["dx", "dy", "cos", "levy", "sigma", "mad", "meteo", "ovx", "gpr"]
 
 
 def _risolvi(insiemi: dict, predittori: list[str], f: pd.DataFrame) -> dict:
@@ -137,7 +140,7 @@ def _risolvi(insiemi: dict, predittori: list[str], f: pd.DataFrame) -> dict:
     return out
 
 
-def costruisci_features(x, y, w: int, orizzonte: int, meteo=None, ovx=None) -> pd.DataFrame:
+def costruisci_features(x, y, w: int, orizzonte: int, meteo=None, ovx=None, gpr=None) -> pd.DataFrame:
     """Per ogni istante t (fine finestra): incrementi grezzi dx, dy sulla
     finestra, coseno (correlazione degli incrementi = parte simmetrica), area
     di Lévy normalizzata (parte antisimmetrica) e oscillazione degli incrementi
@@ -152,10 +155,12 @@ def costruisci_features(x, y, w: int, orizzonte: int, meteo=None, ovx=None) -> p
     predittori vengono confrontati sugli stessi casi.
 
     Con `ovx` (ln della volatilita' attesa per bin, allineata a x) aggiunge la
-    colonna `ovx` con il valore all'istante t; le righe senza OVX sono scartate."""
+    colonna `ovx` con il valore all'istante t; le righe senza OVX sono scartate.
+    `gpr` (ln del rischio geopolitico, allineato a x) funziona allo stesso modo."""
     x, y = np.asarray(x, float), np.asarray(y, float)
     m = None if meteo is None else np.asarray(meteo, float)
     o = None if ovx is None else np.asarray(ovx, float)
+    g = None if gpr is None else np.asarray(gpr, float)
     rows = []
     for t in range(w, len(x) - orizzonte):
         xs, ys = x[t - w : t + 1], y[t - w : t + 1]
@@ -176,9 +181,13 @@ def costruisci_features(x, y, w: int, orizzonte: int, meteo=None, ovx=None) -> p
             if not np.isfinite(o[t]):
                 continue
             riga += (float(o[t]),)
+        if g is not None:
+            if not np.isfinite(g[t]):
+                continue
+            riga += (float(g[t]),)
         rows.append(riga)
     cols = (["t", "dx", "dy", "cos", "levy", "sigma", "mad", "fwd"] + ([] if m is None else ["meteo"])
-            + ([] if o is None else ["ovx"]))
+            + ([] if o is None else ["ovx"]) + ([] if g is None else ["gpr"]))
     return pd.DataFrame(rows, columns=cols)
 
 
@@ -303,25 +312,28 @@ INSIEMI_OSC = {
     "+ agitazione": ["s_breve", "s_lungo", "mad", "agit"],
     "+ agitazione e meteo": ["s_breve", "s_lungo", "mad", "agit", "meteo"],
     "+ agitazione e OVX": ["s_breve", "s_lungo", "mad", "agit", "ovx"],
+    "+ agitazione e GPR": ["s_breve", "s_lungo", "mad", "agit", "gpr"],
     "Tutto": None,
 }
-PREDITTORI_OSC = ["s_breve", "s_lungo", "mad", "agit", "meteo", "ovx"]
+PREDITTORI_OSC = ["s_breve", "s_lungo", "mad", "agit", "meteo", "ovx", "gpr"]
 _PAVIMENTO = 1e-6  # evita ln(0) nei periodi senza movimento
 
 
-def costruisci_features_oscillazione(x, y, w: int, orizzonte: int, meteo=None, ovx=None,
+def costruisci_features_oscillazione(x, y, w: int, orizzonte: int, meteo=None, ovx=None, gpr=None,
                                     breve: int = 5) -> pd.DataFrame:
     """Una riga per ogni t >= w. Predittori (logaritmi): `s_breve` e `s_lungo`
     = RMS degli incrementi negli ultimi `breve` e w bin, `mad` = deviazione
     assoluta mediana sugli ultimi w; `agit` = media di y sugli ultimi `breve`
     bin; `meteo` (opzionale) = media dell'anomalia sugli ultimi w bin;
-    `ovx` (opzionale) = ln della volatilita' attesa per bin all'istante t.
+    `ovx` (opzionale) = ln della volatilita' attesa per bin all'istante t;
+    `gpr` (opzionale) = ln del rischio geopolitico all'istante t.
     `bersaglio` = ln RMS degli incrementi nei prossimi `orizzonte` bin, NaN
     dove il futuro non e' ancora noto (servono per la previsione di oggi)."""
     x, y = np.asarray(x, float), np.asarray(y, float)
     r = np.r_[np.nan, np.diff(x)]
     m = None if meteo is None else np.asarray(meteo, float)
     o = None if ovx is None else np.asarray(ovx, float)
+    g = None if gpr is None else np.asarray(gpr, float)
     breve = min(breve, w)
     rows = []
     for t in range(w, len(x)):
@@ -340,6 +352,8 @@ def costruisci_features_oscillazione(x, y, w: int, orizzonte: int, meteo=None, o
             riga["meteo"] = float(np.nanmean(ms)) if np.isfinite(ms).sum() >= w / 2 else np.nan
         if o is not None:
             riga["ovx"] = float(o[t])
+        if g is not None:
+            riga["gpr"] = float(g[t])
         rows.append(riga)
     return pd.DataFrame(rows)
 
