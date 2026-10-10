@@ -1,3 +1,23 @@
 [client]
 # Nasconde il pulsante "Deploy" e le voci per sviluppatori dal menu in alto a destra.
 toolbarMode = "minimal"
+
+# Stile di FuelMode. Palette 1a: deep space blue, blue green, sky blue, amber flame, princeton orange.
+[theme]
+base = "light"
+primaryColor = "#fb8500"
+backgroundColor = "#eef6fa"
+secondaryBackgroundColor = "#f2f8fb"
+textColor = "#023047"
+linkColor = "#fb8500"
+borderColor = "#c9dde7"
+showWidgetBorder = false
+baseRadius = "14px"
+font = "Archivo, sans-serif"
+headingFont = "Archivo, sans-serif"
+# colori delle serie nei grafici, dalla palette
+chartCategoricalColors = ["#219ebc", "#fb8500", "#023047", "#ffb703", "#8ecae6", "#7c9fb2"]
+
+[theme.sidebar]
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f2f8fb"
