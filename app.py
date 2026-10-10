@@ -170,6 +170,15 @@ usa_gpr = sb.checkbox("Usa il rischio geopolitico (GPR)", value=True,
                       help="Il Geopolitical Risk Index conta gli articoli di giornale su guerre, terrorismo e tensioni "
                            "internazionali. Serve per la scheda «Geopolitica» e viene aggiunto alle previsioni.")
 
+sb.divider()
+sb.subheader("Score rifornimento")
+alpha_s = sb.slider("Sensibilità alla turbolenza (α)", 0.0, 2.0, 1.0, 0.1,
+                    help="Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale. "
+                         "0 = nessuno smorzamento; il PDF dello SCORE 4.0 suggerisce valori fra 0.5 e 1.2.")
+theta_s = sb.slider("Soglia (θ)", 0.25, 3.0, 1.0, 0.25,
+                    help="Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per "
+                         "dare +1 o −1. Più alta = segnali più rari ma più netti.")
+
 # --------------------------------------------------------------------------
 # Dati
 # --------------------------------------------------------------------------
@@ -221,8 +230,8 @@ if usa_gpr:
     except Exception as e:
         errore_gpr = str(e)
 
-tab1, tab_prev, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
-    ["Prezzo", "Prossimi 5 giorni", "Andamento", "Meteo", "Geopolitica", "Prova di previsione", "Oscillazione attesa"])
+tab1, tab_score, tab_prev, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
+    ["Prezzo", "Score rifornimento", "Prossimi 5 giorni", "Andamento", "Meteo", "Geopolitica", "Prova di previsione", "Oscillazione attesa"])
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
@@ -276,17 +285,118 @@ periodi_anno = 252 if freq == "Giorno per giorno" else 52
 # Scheda «Prossimi 5 giorni» - sempre giorno per giorno, indipendente da «Raggruppa i prezzi»
 # --------------------------------------------------------------------------
 GIORNI_PREV, FINESTRA_PREV = 5, 20
+# Oscillazione attesa giorno per giorno, usata da «Prossimi 5 giorni» e «Score rifornimento».
+bins_g, x_g, y_g, m_g, o_g, _ = serie("Giorno per giorno")
+feat_g = bm.costruisci_features_oscillazione(x_g, y_g, FINESTRA_PREV, GIORNI_PREV, meteo=m_g, ovx=o_g)
+modello_g = "+ agitazione e OVX" if o_g is not None else "+ agitazione"
+try:
+    sig = bm.prevedi_oscillazione(feat_g, bm.INSIEMI_OSC[modello_g])  # oscillazione attesa al giorno (frazione)
+    errore_sig = None
+except Exception as e:
+    sig, errore_sig = None, str(e)
+
+
+def storico_oscillazione(feat: pd.DataFrame, cols: list[str], date: pd.DatetimeIndex):
+    """Oscillazione attesa di ogni giorno, calcolata senza guardare il futuro, e oscillazione «normale»
+    (mediana di quella osservata fino a quel giorno)."""
+    sig_t = bm.oscillazione_scorrevole(feat, cols, GIORNI_PREV)
+    sigma = pd.Series(sig_t.values, index=date[sig_t.index]).reindex(date)
+    # oscillazione normale = mediana di quella osservata fino a quel giorno
+    norma = pd.Series(np.exp(feat["s_lungo"].values), index=date[feat["t"].values]).reindex(date).expanding().median()
+    return sigma, norma
+
+
+with tab_score:
+    st.subheader("Conviene fare rifornimento adesso?")
+    if errore_sig is not None:
+        st.error(f"Non riesco a calcolare lo score: {errore_sig}")
+    else:
+        sigma_s, norma_s = storico_oscillazione(feat_g, bm.INSIEMI_OSC[modello_g], bins_g.index)
+        # oggi si usa la stessa oscillazione attesa delle altre schede (modello addestrato su tutto lo storico)
+        sigma_s = sigma_s.copy()
+        sigma_s.iloc[-1] = sig
+        sc = bm.score_rifornimento(bins_g["eur"], sigma_s, norma_s, alpha_s, theta_s, GIORNI_PREV)
+        oggi = sc.iloc[-1]
+        classe = int(oggi["classe"])
+        testo = {
+            1: ("+1 · Rifornisci", "Il Brent è sopra la media degli ultimi 30 giorni più di quanto spieghi il suo "
+                "normale oscillare: i prezzi alla pompa tendono a seguirlo con qualche giorno di ritardo, quindi "
+                "conviene fare il pieno prima che salgano."),
+            0: ("0 · Neutro", "Il Brent è vicino alla sua media degli ultimi 30 giorni, oppure il mercato è troppo "
+                "agitato per fidarsi dello scarto: nessuna indicazione, rifornisci quando ti serve."),
+            -1: ("−1 · Aspetta", "Il Brent è sotto la media degli ultimi 30 giorni più di quanto spieghi il suo "
+                 "normale oscillare: i prezzi alla pompa tendono a scendere nei prossimi giorni, quindi se puoi "
+                 "conviene aspettare."),
+        }[classe]
+        {1: st.success, 0: st.info, -1: st.warning}[classe](f"**{testo[0]}** — {testo[1]}")
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Score S", f"{oggi['S']:+.2f}", help=f"+1 da {theta_s:+.2f} in su, −1 da {-theta_s:+.2f} in giù.")
+        c2.metric("Brent rispetto alla media 30 giorni", f"{100 * (np.exp(oggi['scarto']) - 1):+.1f}%",
+                  help=f"Oggi {oggi['prezzo']:.2f} € al barile, media degli ultimi 30 giorni {oggi['media']:.2f} €.")
+        c3.metric("Oscillazione attesa in 5 giorni", f"±{100 * oggi['sigma'] * np.sqrt(GIORNI_PREV):.1f}%",
+                  help="Il «rumore normale» con cui si confronta lo scarto dalla media.")
+        c4.metric("Stabilità", f"{oggi['stabilita']:.2f}",
+                  help="1 = mercato calmo, segnale pieno. Sotto 1 il mercato è più agitato del normale e lo score "
+                       "viene avvicinato a zero.")
+
+        st.latex(r"S=\frac{\ln\left(P_t/\bar P_{30}\right)}{\sigma\sqrt{5}}\cdot e^{-\alpha\,\max\left(0,\;"
+                 r"\sigma/\sigma_{norm}-1\right)}")
+        st.caption(
+            "Adattamento dello SCORE 4.0: il rapporto fra prezzo di oggi e media dei 30 giorni prende il posto del "
+            "rapporto fra tempo di riferimento e tempo effettivo; la divisione per l'oscillazione attesa in 5 giorni "
+            "(σ√5) fa da normalizzazione; il fattore esponenziale è la stabilità, fra 0 e 1. "
+            f"Con α = {alpha_s:.1f} e θ = {theta_s:.2f}."
+        )
+
+        inizio_s = t - pd.Timedelta(days=giorni_grafico)
+        d_s = sc.loc[inizio_s:, ["S", "classe"]].dropna().rename_axis("Data").reset_index()
+        if len(d_s):
+            d_s["Esito"] = d_s["classe"].map({1: "+1 rifornisci", 0: "0 neutro", -1: "−1 aspetta"})
+            asse = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y"))
+            punti = alt.Chart(d_s).mark_circle(size=28).encode(
+                x=asse, y=alt.Y("S:Q", title="Score S"),
+                color=alt.Color("Esito:N", title=None, legend=alt.Legend(orient="bottom"),
+                                scale=alt.Scale(domain=["+1 rifornisci", "0 neutro", "−1 aspetta"],
+                                                range=["#2e7d32", "#9e9e9e", "#c62828"])),
+                tooltip=[alt.Tooltip("Data:T", title="Data", format="%d/%m/%Y"), alt.Tooltip("S:Q", format="+.2f"),
+                         alt.Tooltip("Esito:N")])
+            linea = alt.Chart(d_s).mark_line(color="#bdbdbd", strokeWidth=1).encode(x=asse, y="S:Q")
+            soglie = alt.Chart(pd.DataFrame({"y": [theta_s, -theta_s]})).mark_rule(strokeDash=[4, 4], color="#757575"
+                                                                                 ).encode(y="y:Q")
+            st.altair_chart(linea + punti + soglie, width="stretch")
+            st.caption("Lo score negli ultimi mesi; le linee tratteggiate sono le soglie ±θ.")
+
+        st.markdown("**Ha funzionato in passato?** Cosa ha fatto il Brent nei 5 giorni di borsa dopo ogni esito "
+                    "(con l'oscillazione attesa calcolata ogni volta senza guardare il futuro).")
+        ver = bm.verifica_score(sc, GIORNI_PREV).assign(
+            Classe=lambda d: d["Classe"].map({"+1": "+1 rifornisci", "0": "0 neutro", "-1": "−1 aspetta",
+                                              "Tutti": "Tutti i giorni"}),
+            Quota=lambda d: 100 * d["Quota"], **{"Giorni in salita": lambda d: 100 * d["Giorni in salita"]})
+        st.dataframe(
+            ver.rename(columns={"Classe": "Esito", "Quota": "Quota dei giorni (%)",
+                                "Variazione media": "Brent nei 5 giorni dopo (%)",
+                                "Giorni in salita": "Volte in cui è salito (%)"}),
+            hide_index=True,
+            column_config={"Quota dei giorni (%)": st.column_config.NumberColumn(format="%.0f"),
+                           "Brent nei 5 giorni dopo (%)": st.column_config.NumberColumn(format="%+.2f"),
+                           "Volte in cui è salito (%)": st.column_config.NumberColumn(format="%.0f")},
+        )
+        periodo = sc["S"].dropna()
+        st.caption(
+            f"Dal {periodo.index[0]:%d/%m/%Y} al {periodo.index[-1]:%d/%m/%Y}. Con la logica dello score ci si aspetta "
+            "che dopo un +1 il Brent salga più spesso della media di tutti i giorni, e dopo un −1 meno spesso: "
+            "così il segnale anticipa la pompa ancora di più. Questa prova guarda solo il Brent, non i prezzi alla "
+            "pompa, che non sono fra i dati dell'app: dice se il segnale è coerente, non quanto si risparmia davvero. "
+            "Non è un consiglio di investimento."
+        )
+
 with tab_prev:
     st.subheader(f"Il prezzo nei prossimi {GIORNI_PREV} giorni di borsa")
     valuta = st.radio("Mostra in", ["Euro", "Dollari"], horizontal=True, key="valuta_prev")
     col_p, simbolo = ("eur", "€") if valuta == "Euro" else ("usd", "$")
-    _, x_g, y_g, m_g, o_g, _ = serie("Giorno per giorno")
-    try:
-        feat_g = bm.costruisci_features_oscillazione(x_g, y_g, FINESTRA_PREV, GIORNI_PREV, meteo=m_g, ovx=o_g)
-        modello_g = "+ agitazione e OVX" if o_g is not None else "+ agitazione"
-        sig = bm.prevedi_oscillazione(feat_g, bm.INSIEMI_OSC[modello_g])  # oscillazione attesa al giorno (frazione)
-    except Exception as e:
-        st.error(f"Non riesco a calcolare la previsione: {e}")
+    if errore_sig is not None:
+        st.error(f"Non riesco a calcolare la previsione: {errore_sig}")
     else:
         p0 = float(ora[col_p])
         k = np.arange(GIORNI_PREV + 1)                                   # 0 = oggi, poi i giorni di borsa successivi

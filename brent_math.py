@@ -442,3 +442,65 @@ def valida_oscillazione(feat: pd.DataFrame, orizzonte: int, passo: int = 21, ini
     meta = {"n_test": int(te.sum()), "n_passi": n_passi,
             "primo_test": int(f.t.values[te][0]), "ultimo_test": int(f.t.values[te][-1])}
     return pd.DataFrame(rows), serie, meta
+
+
+def oscillazione_scorrevole(feat: pd.DataFrame, cols: list[str], orizzonte: int, passo: int = 21,
+                            inizio_frac: float = 0.4, lam: float = 1.0) -> pd.Series:
+    """Oscillazione attesa (frazione per bin) per ogni riga di `feat`, comprese le
+    ultime senza bersaglio, senza mai usare il futuro: a blocchi di `passo` righe
+    il modello si riaddestra sui soli casi gia' conclusi prima dell'inizio del
+    blocco. Il primo `inizio_frac` resta NaN. Indice = t."""
+    f = feat.dropna(subset=cols).reset_index(drop=True)
+    n = len(f)
+    out = np.full(n, np.nan)
+    noto = f.bersaglio.notna().values
+    for a in range(int(n * inizio_frac), n, passo):
+        b = min(a + passo, n)
+        tr = noto & (f.t + orizzonte <= f.t.iloc[a]).values
+        if tr.sum() < 30:
+            continue
+        pred, var = _fit_ridge(f.loc[tr, cols].values, f.bersaglio.values[tr], lam)
+        out[a:b] = np.exp(pred(f.loc[a : b - 1, cols].values) + var / 2)
+    return pd.Series(out, index=f.t.values)
+
+
+# --------------------------------------------------------------------------
+# Score di rifornimento (adattamento dello SCORE 4.0)
+# --------------------------------------------------------------------------
+def score_rifornimento(prezzo: pd.Series, sigma: pd.Series, sigma_norm: pd.Series, alpha: float = 1.0,
+                       soglia: float = 1.0, orizzonte: int = 5, giorni_media: int = 30) -> pd.DataFrame:
+    """Score a tre valori, logica «la pompa segue il Brent con ritardo».
+
+        S = ln(P_t / media_30) / (sigma * sqrt(orizzonte)) * exp(-alpha * max(0, sigma/sigma_norm - 1))
+
+    Il primo fattore e' lo scarto del prezzo dalla media degli ultimi
+    `giorni_media` giorni di calendario, in unita' dell'oscillazione attesa nei
+    prossimi `orizzonte` giorni (come la normalizzazione dello SCORE 4.0). Il
+    secondo e' la stabilita', in (0, 1]: vale 1 con mercato calmo e smorza il
+    segnale quando l'oscillazione attesa supera quella normale.
+
+    Classe: +1 (rifornisci: Brent sopra la media, la pompa salira') se
+    S >= soglia, -1 (aspetta: Brent sotto la media, la pompa scendera') se
+    S <= -soglia, 0 altrimenti. Tutte le serie hanno indice di date."""
+    media = prezzo.rolling(f"{giorni_media}D", min_periods=max(5, giorni_media // 2)).mean()
+    scarto = np.log(prezzo / media)
+    stab = np.exp(-alpha * np.maximum(0.0, sigma / sigma_norm - 1))
+    s = scarto / (sigma * np.sqrt(orizzonte)) * stab
+    classe = pd.Series(np.select([s >= soglia, s <= -soglia], [1, -1], 0), index=prezzo.index).where(s.notna())
+    return pd.DataFrame({"prezzo": prezzo, "media": media, "scarto": scarto, "sigma": sigma,
+                         "stabilita": stab, "S": s, "classe": classe})
+
+
+def verifica_score(score: pd.DataFrame, orizzonte: int = 5) -> pd.DataFrame:
+    """Cosa ha fatto il Brent nei `orizzonte` giorni di borsa dopo ogni classe:
+    numero e quota di giorni, variazione media e quota di giorni in cui e' salito.
+    Con la logica B ci si aspetta piu' salite dopo +1 e piu' discese dopo -1."""
+    fwd = np.log(score.prezzo.shift(-orizzonte) / score.prezzo)
+    d = score.assign(fwd=fwd).dropna(subset=["S", "fwd"])
+    righe = []
+    for nome, sel in (("+1", d.classe == 1), ("0", d.classe == 0), ("-1", d.classe == -1), ("Tutti", d.classe.notna())):
+        x = d.fwd[sel]
+        righe.append({"Classe": nome, "Giorni": int(sel.sum()), "Quota": float(sel.mean()),
+                      "Variazione media": float(100 * x.mean()) if len(x) else np.nan,
+                      "Giorni in salita": float((x > 0).mean()) if len(x) else np.nan})
+    return pd.DataFrame(righe)

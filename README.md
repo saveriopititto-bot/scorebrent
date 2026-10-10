@@ -4,9 +4,15 @@ App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent d
 
 ## Cosa mostra
 
-L'app ha sette schede.
+L'app ha otto schede.
 
 - **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
+- **Score rifornimento**: un adattamento dello SCORE 4.0 che dà ogni giorno uno di tre esiti.
+  - **+1 rifornisci**: il Brent è sopra la media degli ultimi 30 giorni più di quanto spieghi il suo normale oscillare. I prezzi alla pompa tendono a seguirlo con qualche giorno di ritardo, quindi conviene fare il pieno prima che salgano.
+  - **−1 aspetta**: il Brent è sotto la media più del normale, e la pompa tenderà a scendere.
+  - **0 neutro**: il Brent è vicino alla media, oppure il mercato è troppo agitato per fidarsi dello scarto.
+  - La scheda mostra lo score di oggi e le sue parti, la formula e un grafico degli ultimi mesi con le soglie.
+  - Una tabella mostra cosa ha fatto il Brent nei 5 giorni dopo ogni esito, su tutto lo storico.
 - **Prossimi 5 giorni**: grafico con il prezzo delle ultime settimane e, tratteggiata, la previsione per i prossimi 5 giorni di borsa, in euro o in dollari.
   - La linea tratteggiata resta al prezzo di oggi, perché la direzione del Brent non si può prevedere dal passato.
   - Attorno ci sono due fasce: dove il prezzo dovrebbe trovarsi in circa 2 casi su 3 e in circa 19 casi su 20. Si allargano giorno dopo giorno.
@@ -52,6 +58,8 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 | Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
 | Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
 | Usa il rischio geopolitico (GPR) | Scarica il GPR e lo aggiunge alle previsioni | Geopolitica, Prova di previsione, Oscillazione attesa |
+| Sensibilità alla turbolenza (α) | Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale | Score rifornimento |
+| Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento |
 | Mostra in (dentro la scheda) | Euro o dollari | Prossimi 5 giorni |
 
 ## Come leggere i risultati
@@ -62,6 +70,12 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 - *Capacità di distinguere*: 0.5 è come tirare a indovinare, 1 è perfetto. Sotto la tabella c'è il margine dentro cui può variare per puro caso.
 - *Anni in cui fa meglio*: un modello utile vince nella maggior parte degli anni, non solo in media.
 - Con rialzo minimo 0% è normale che nessun gruppo batta il riferimento: la direzione del prezzo dal solo passato è quasi imprevedibile. Con una soglia sopra lo 0% contano di più sigma e MAD.
+
+**Score rifornimento**
+
+- Lo score continuo S misura di quante «oscillazioni tipiche in 5 giorni» il Brent è lontano dalla media dei 30 giorni. Diventa +1 sopra θ e −1 sotto −θ; con θ = 1 lo scarto deve superare un movimento normale di 5 giorni.
+- La *stabilità* vale 1 con mercato calmo. Quando l'oscillazione attesa supera quella normale scende verso 0 e avvicina lo score a «neutro».
+- Nella tabella storica, il segnale è coerente se dopo un +1 il Brent è salito più spesso della media di tutti i giorni e dopo un −1 meno spesso. La tabella guarda solo il Brent: i prezzi alla pompa non sono fra i dati dell'app, quindi non dice quanto si risparmia davvero.
 
 **Prossimi 5 giorni**
 
@@ -86,6 +100,7 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 - **Prova a finestre scorrevoli**: entrambe le prove imparano sul primo 40% dello storico. Poi, ogni 21 giorni (o 4 settimane), si riaddestrano su tutto il passato e prevedono il blocco successivo. Dal periodo di studio si escludono i casi il cui esito non era ancora noto all'inizio del blocco, così il modello non vede mai il futuro.
 - **Previsione del rialzo**: regressione logistica con penalità ridge sui dati della finestra mobile, cioè variazione di prezzo e agitazione, legame fra i due, area di Lévy, sigma, MAD, temperatura, OVX e GPR.
 - **Previsione dell'oscillazione**: regressione ridge sul logaritmo dell'oscillazione dei prossimi periodi, con una correzione per non sottostimarla tornando dalla scala logaritmica. La previsione mostrata in alto nella scheda usa il modello «+ agitazione e OVX», oppure «+ agitazione» se l'OVX non è disponibile.
+- **Score rifornimento**: S = ln(Pₜ / P̄₃₀) / (σ·√5) · e^(−α·max(0, σ/σ_norm − 1)). Pₜ è il Brent in euro di oggi e P̄₃₀ la media degli ultimi 30 giorni di calendario. σ è l'oscillazione attesa al giorno (modello «+ agitazione e OVX») e σ_norm l'oscillazione tipica osservata fino a quel giorno. È lo SCORE 4.0 riadattato: il rapporto fra prezzo e media prende il posto del rapporto fra tempo di riferimento e tempo effettivo, σ√5 fa da normalizzazione e l'esponenziale è la stabilità. Per i giorni passati σ viene calcolata con il modello riaddestrato ogni mese, senza guardare il futuro.
 - **Fasce dei prossimi 5 giorni**: con oscillazione attesa σ al giorno, dopo k giorni la fascia va da P·e^(−zσ√k) a P·e^(zσ√k), con z = 1 (2 casi su 3) e z = 1.96 (19 su 20). In dollari si usa la stessa ampiezza in percentuale.
 - **OVX**: è una volatilità annua in %. Per confrontarlo con l'oscillazione per periodo si divide per √252 (giorni) o √52 (settimane).
 - **GPR**: nei dati per prevedere entra il logaritmo della media degli ultimi 7 giorni di calendario, oppure della media della settimana. Quando gli ultimi giorni non sono ancora pubblicati si usa l'ultimo valore disponibile, per al massimo 10 giorni di borsa.
