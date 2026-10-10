@@ -1,6 +1,8 @@
 """App «Prezzo del petrolio»: Brent da Yahoo Finance e analisi del suo andamento
 (matematica del paper "sisma", in brent_math.py), con la temperatura in Europa da
 Open-Meteo come possibile dato di previsione. Avvio: `streamlit run app.py`."""
+from io import BytesIO
+
 import altair as alt
 import numpy as np
 import pandas as pd
@@ -23,6 +25,7 @@ NOMI_OSC = {
     "+ agitazione": "Modello: + agitazione (massimo − minimo)",
     "+ agitazione e meteo": "Modello: + agitazione e temperatura",
     "+ agitazione e OVX": "Modello: + agitazione e OVX",
+    "+ agitazione e GPR": "Modello: + agitazione e rischio geopolitico",
     "Tutto": "Modello: tutti i dati disponibili",
     "Come appena passato": "Riferimento: come nel periodo appena passato",
     "OVX così com'è": "Riferimento: OVX così com'è",
@@ -37,6 +40,7 @@ NOMI_INSIEMI = {
     "+ oscillazione": "+ quanto oscilla il prezzo (sigma e MAD)",
     "+ meteo": "+ temperatura in Europa",
     "+ OVX": "+ volatilità attesa dal mercato (OVX)",
+    "+ GPR": "+ rischio geopolitico (GPR)",
     "Tutto": "Tutti i dati disponibili",
 }
 
@@ -50,6 +54,8 @@ CITTA = {
 }
 METEO_STORICO = "https://archive-api.open-meteo.com/v1/archive"
 METEO_RECENTE = "https://api.open-meteo.com/v1/forecast"
+# Geopolitical Risk Index giornaliero (Caldara e Iacoviello): 100 = media 1985-2019.
+GPR_URL = "https://www.matteoiacoviello.com/gpr_files/data_gpr_daily_recent.xls"
 
 
 @st.cache_data(ttl=900, show_spinner="Scarico i prezzi da Yahoo Finance…")
@@ -91,6 +97,20 @@ def scarica_meteo(inizio: pd.Timestamp, fine: pd.Timestamp) -> pd.Series:
     if media.dropna().empty:
         raise ValueError("Open-Meteo non ha restituito temperature")
     return media.dropna()
+
+
+@st.cache_data(ttl=12 * 3600, show_spinner="Scarico il rischio geopolitico (GPR)…")
+def scarica_gpr() -> pd.DataFrame:
+    """GPR giornaliero (calendario, weekend compresi): GPRD totale, GPRD_ACT (atti), GPRD_THREAT
+    (minacce) ed `event`, l'etichetta in inglese degli eventi principali."""
+    r = requests.get(GPR_URL, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
+    r.raise_for_status()
+    d = pd.read_excel(BytesIO(r.content), sheet_name=0)
+    d = d.dropna(subset=["DAY", "GPRD"])
+    d.index = pd.to_datetime(d["DAY"].astype(int).astype(str), format="%Y%m%d")
+    if d.empty:
+        raise ValueError("il file del GPR è vuoto")
+    return d[["GPRD", "GPRD_ACT", "GPRD_THREAT", "event"]].sort_index()
 
 
 def aggrega(base: pd.DataFrame, freq: str) -> pd.DataFrame:
@@ -146,6 +166,9 @@ usa_meteo = sb.checkbox("Usa la temperatura in Europa", value=True,
 usa_ovx = sb.checkbox("Usa la volatilità attesa dal mercato (OVX)", value=True,
                       help="L'indice OVX misura quanto gli operatori si aspettano che il petrolio oscilli nei prossimi "
                            "30 giorni, ricavato dai prezzi delle opzioni. Viene aggiunto alle previsioni.")
+usa_gpr = sb.checkbox("Usa il rischio geopolitico (GPR)", value=True,
+                      help="Il Geopolitical Risk Index conta gli articoli di giornale su guerre, terrorismo e tensioni "
+                           "internazionali. Serve per la scheda «Geopolitica» e viene aggiunto alle previsioni.")
 
 # --------------------------------------------------------------------------
 # Dati
@@ -190,8 +213,16 @@ if usa_ovx:
     except Exception as e:
         errore_ovx = str(e)
 
-tab1, tab_prev, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Prezzo", "Prossimi 5 giorni", "Andamento", "Meteo", "Prova di previsione", "Oscillazione attesa"])
+# Rischio geopolitico giornaliero; None se disattivato o non disponibile.
+gpr_df, errore_gpr = None, None
+if usa_gpr:
+    try:
+        gpr_df = scarica_gpr()
+    except Exception as e:
+        errore_gpr = str(e)
+
+tab1, tab_prev, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
+    ["Prezzo", "Prossimi 5 giorni", "Andamento", "Meteo", "Geopolitica", "Prova di previsione", "Oscillazione attesa"])
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
@@ -215,7 +246,8 @@ with tab1:
 def serie(freq: str):
     """Prezzi raggruppati per `freq` e serie allineate: x = ln prezzo in euro, y = agitazione
     (ln(1 + escursione % fra massimo e minimo)), m = temperatura rispetto al normale,
-    o = ln volatilità attesa per periodo dall'OVX (m e o None se non disponibili)."""
+    o = ln volatilità attesa per periodo dall'OVX, g = ln rischio geopolitico (media degli ultimi 7 giorni di
+    calendario, o della settimana) (m, o e g None se non disponibili)."""
     bins = aggrega(base, freq)
     x = np.log(bins["eur"].to_numpy())
     y = np.log1p(100 * (bins["high"] / bins["low"] - 1)).to_numpy()
@@ -228,10 +260,16 @@ def serie(freq: str):
         o_bin = ovx_serie.reindex(base.index, method="ffill", limit=5)
         o_bin = o_bin if freq == "Giorno per giorno" else o_bin.resample("W-FRI").last()
         o = np.log(o_bin.reindex(bins.index).to_numpy() / 100 / np.sqrt(252 if freq == "Giorno per giorno" else 52))
-    return bins, x, y, m, o
+    g = None
+    if gpr_df is not None:
+        gd = gpr_df["GPRD"]
+        g_bin = (gd.rolling("7D").mean().reindex(bins.index, method="ffill", limit=10) if freq == "Giorno per giorno"
+                 else gd.resample("W-FRI").mean().reindex(bins.index))
+        g = np.log(g_bin.clip(lower=1).to_numpy())
+    return bins, x, y, m, o, g
 
 
-bins, x, y, m, o = serie(freq)
+bins, x, y, m, o, g = serie(freq)
 periodi_anno = 252 if freq == "Giorno per giorno" else 52
 
 # --------------------------------------------------------------------------
@@ -242,7 +280,7 @@ with tab_prev:
     st.subheader(f"Il prezzo nei prossimi {GIORNI_PREV} giorni di borsa")
     valuta = st.radio("Mostra in", ["Euro", "Dollari"], horizontal=True, key="valuta_prev")
     col_p, simbolo = ("eur", "€") if valuta == "Euro" else ("usd", "$")
-    _, x_g, y_g, m_g, o_g = serie("Giorno per giorno")
+    _, x_g, y_g, m_g, o_g, _ = serie("Giorno per giorno")
     try:
         feat_g = bm.costruisci_features_oscillazione(x_g, y_g, FINESTRA_PREV, GIORNI_PREV, meteo=m_g, ovx=o_g)
         modello_g = "+ agitazione e OVX" if o_g is not None else "+ agitazione"
@@ -392,6 +430,48 @@ with tab3:
         )
 
 # --------------------------------------------------------------------------
+# Scheda «Geopolitica»
+# --------------------------------------------------------------------------
+with tab_geo:
+    st.subheader("Quanto è alto il rischio geopolitico?")
+    if not usa_gpr:
+        st.info("Il rischio geopolitico è disattivato: attiva «Usa il rischio geopolitico (GPR)» nella barra laterale.")
+    elif gpr_df is None:
+        st.warning(f"Non sono riuscito a scaricare il rischio geopolitico (GPR): {errore_gpr}")
+    else:
+        gd = gpr_df["GPRD"]
+        ultimo_g = gd.index[-1]
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Media degli ultimi 7 giorni (al {ultimo_g:%d/%m/%Y})", f"{gd.iloc[-7:].mean():.0f}",
+                  help="100 è il livello medio dal 1985 al 2019. 200 vuol dire il doppio degli articoli sul tema.")
+        c2.metric("Media degli ultimi 30 giorni", f"{gd.iloc[-30:].mean():.0f}")
+        c3.metric("Minacce / atti (30 giorni)",
+                  f"{gpr_df['GPRD_THREAT'].iloc[-30:].mean():.0f} / {gpr_df['GPRD_ACT'].iloc[-30:].mean():.0f}",
+                  help="Il GPR si divide in minacce (tensioni, avvertimenti, rischio di guerra) e atti (attacchi, "
+                       "guerre in corso). Entrambi in scala 100 = media 1985–2019.")
+        inizio_g = t - pd.Timedelta(days=giorni_grafico)
+        grafico(gd.rolling("30D").mean().loc[inizio_g:].rename("Media su 30 giorni").to_frame()
+                .join(gd.rolling("7D").mean().loc[inizio_g:].rename("Media su 7 giorni")), "Indice (100 = normale)")
+        grafico(base.loc[inizio_g:, ["eur"]].rename(columns={"eur": "Euro al barile"}), "Prezzo al barile")
+        eventi = gpr_df.loc[gpr_df["event"].notna() & (gpr_df["event"].astype(str).str.strip() != ""), ["event", "GPRD"]]
+        if len(eventi):
+            st.markdown("**Eventi principali più recenti** (etichette originali in inglese)")
+            st.dataframe(
+                eventi.iloc[::-1].head(10).rename_axis("Data").reset_index()
+                .assign(Data=lambda d: d["Data"].dt.strftime("%d/%m/%Y"))
+                .rename(columns={"event": "Evento", "GPRD": "GPR del giorno"}),
+                hide_index=True, column_config={"GPR del giorno": st.column_config.NumberColumn(format="%.0f")},
+            )
+        st.caption(
+            "Il Geopolitical Risk Index conta, ogni giorno, la quota di articoli di 10 grandi giornali che parlano di "
+            "guerre, terrorismo e tensioni fra Paesi. Le crisi in Medio Oriente o fra produttori di petrolio possono "
+            "far salire il prezzo o renderlo più agitato; le schede «Prova di previsione» e «Oscillazione attesa» "
+            "verificano se succede davvero. Il file è aggiornato dagli autori con qualche giorno di ritardo. Fonte: "
+            "D. Caldara e M. Iacoviello, «Measuring Geopolitical Risk», American Economic Review, 2022, dati da "
+            "[matteoiacoviello.com](https://www.matteoiacoviello.com/gpr.htm)."
+        )
+
+# --------------------------------------------------------------------------
 # Scheda 4 - Prova di previsione
 # --------------------------------------------------------------------------
 with tab4:
@@ -414,11 +494,12 @@ with tab4:
            if m is not None else "")
         + (" **OVX**: quanto il mercato si aspetta che il petrolio oscilli nei prossimi 30 giorni."
            if o is not None else "")
+        + (" **GPR**: rischio geopolitico, media degli ultimi 7 giorni." if g is not None else "")
     )
     if st.button("Esegui la prova"):
         try:
             with st.spinner("Eseguo la prova su tutto lo storico…"):
-                feat = bm.costruisci_features(x, y, w, orizzonte, meteo=m, ovx=o)
+                feat = bm.costruisci_features(x, y, w, orizzonte, meteo=m, ovx=o, gpr=g)
                 res, meta = bm.validazione(feat, orizzonte, soglia / 100, passo=passo,
                                            anni=bins.index[feat["t"].to_numpy()].year)
         except Exception as e:
@@ -487,11 +568,12 @@ with tab5:
         "Prevedere se il prezzo salirà o scenderà è quasi impossibile; prevedere **quanto si muoverà** è molto più "
         "fattibile, perché i periodi agitati tendono a durare. Il modello usa l'oscillazione recente (*sigma* e *MAD*, "
         f"sugli ultimi {w} {unita} e sugli ultimi 5) e l'agitazione, cioè la distanza fra massimo e minimo"
-        + (", più la volatilità attesa dal mercato (OVX)." if o is not None else ".")
+        + (", più la volatilità attesa dal mercato (OVX)" if o is not None else "")
+        + (". Nella prova c'è anche un modello con il rischio geopolitico (GPR)." if g is not None else ".")
     )
     if usa_ovx and o is None:
         st.warning(f"Non sono riuscito a scaricare l'OVX, continuo senza: {errore_ovx}")
-    feat_osc = bm.costruisci_features_oscillazione(x, y, w, orizzonte, meteo=m, ovx=o)
+    feat_osc = bm.costruisci_features_oscillazione(x, y, w, orizzonte, meteo=m, ovx=o, gpr=g)
     try:
         cols_oggi = bm.INSIEMI_OSC["+ agitazione e OVX" if o is not None else "+ agitazione"]
         attesa = 100 * bm.prevedi_oscillazione(feat_osc, cols_oggi)
