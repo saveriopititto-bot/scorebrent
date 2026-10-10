@@ -56,6 +56,10 @@ METEO_STORICO = "https://archive-api.open-meteo.com/v1/archive"
 METEO_RECENTE = "https://api.open-meteo.com/v1/forecast"
 # Geopolitical Risk Index giornaliero (Caldara e Iacoviello): 100 = media 1985-2019.
 GPR_URL = "https://www.matteoiacoviello.com/gpr_files/data_gpr_daily_recent.xls"
+# Prezzi medi nazionali alla pompa, settimanali, tasse incluse (Weekly Oil Bulletin della Commissione Europea,
+# ripubblicato da fuel-prices.eu, CC BY 4.0).
+POMPA_URL = "https://www.fuel-prices.eu/research/data/d1-eu-weekly-bulletin/fp-d1-eu-weekly-panel.parquet"
+LITRI_BARILE = 158.987
 
 
 @st.cache_data(ttl=900, show_spinner="Scarico i prezzi da Yahoo Finance…")
@@ -111,6 +115,20 @@ def scarica_gpr() -> pd.DataFrame:
     if d.empty:
         raise ValueError("il file del GPR è vuoto")
     return d[["GPRD", "GPRD_ACT", "GPRD_THREAT", "event"]].sort_index()
+
+
+@st.cache_data(ttl=12 * 3600, show_spinner="Scarico i prezzi alla pompa in Italia…")
+def scarica_pompa() -> pd.DataFrame:
+    """Prezzi medi settimanali in Italia, euro al litro con tasse; indice = lunedì del listino."""
+    r = requests.get(POMPA_URL, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
+    r.raise_for_status()
+    d = pd.read_parquet(BytesIO(r.content))
+    d = d[d["country_code"] == "IT"]
+    if d.empty:
+        raise ValueError("nel file non ci sono prezzi per l'Italia")
+    d.index = pd.to_datetime(d["week"])
+    return d[["euro95_eur_l", "diesel_eur_l"]].rename(
+        columns={"euro95_eur_l": "Benzina", "diesel_eur_l": "Gasolio"}).sort_index().astype(float)
 
 
 def aggrega(base: pd.DataFrame, freq: str) -> pd.DataFrame:
@@ -169,6 +187,9 @@ usa_ovx = sb.checkbox("Usa la volatilità attesa dal mercato (OVX)", value=True,
 usa_gpr = sb.checkbox("Usa il rischio geopolitico (GPR)", value=True,
                       help="Il Geopolitical Risk Index conta gli articoli di giornale su guerre, terrorismo e tensioni "
                            "internazionali. Serve per la scheda «Geopolitica» e viene aggiunto alle previsioni.")
+usa_pompa = sb.checkbox("Usa i prezzi alla pompa in Italia", value=True,
+                        help="Prezzi medi settimanali di benzina e gasolio in Italia, dal Weekly Oil Bulletin della "
+                             "Commissione Europea. Servono per la scheda «Pompa (Italia)» e per verificare lo score.")
 
 sb.divider()
 sb.subheader("Score rifornimento")
@@ -222,6 +243,14 @@ if usa_ovx:
     except Exception as e:
         errore_ovx = str(e)
 
+# Prezzi settimanali alla pompa in Italia; None se disattivati o non disponibili.
+pompa_df, errore_pompa = None, None
+if usa_pompa:
+    try:
+        pompa_df = scarica_pompa()
+    except Exception as e:
+        errore_pompa = str(e)
+
 # Rischio geopolitico giornaliero; None se disattivato o non disponibile.
 gpr_df, errore_gpr = None, None
 if usa_gpr:
@@ -230,8 +259,8 @@ if usa_gpr:
     except Exception as e:
         errore_gpr = str(e)
 
-tab1, tab_score, tab_prev, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
-    ["Prezzo", "Score rifornimento", "Prossimi 5 giorni", "Andamento", "Meteo", "Geopolitica", "Prova di previsione", "Oscillazione attesa"])
+tab1, tab_score, tab_prev, tab_pompa, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
+    ["Prezzo", "Score rifornimento", "Prossimi 5 giorni", "Pompa (Italia)", "Andamento", "Meteo", "Geopolitica", "Prova di previsione", "Oscillazione attesa"])
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
@@ -386,9 +415,89 @@ with tab_score:
         st.caption(
             f"Dal {periodo.index[0]:%d/%m/%Y} al {periodo.index[-1]:%d/%m/%Y}. Con la logica dello score ci si aspetta "
             "che dopo un +1 il Brent salga più spesso della media di tutti i giorni, e dopo un −1 meno spesso: "
-            "così il segnale anticipa la pompa ancora di più. Questa prova guarda solo il Brent, non i prezzi alla "
-            "pompa, che non sono fra i dati dell'app: dice se il segnale è coerente, non quanto si risparmia davvero. "
-            "Non è un consiglio di investimento."
+            "così il segnale anticipa la pompa ancora di più. Questa prova guarda solo il Brent: quanto si risparmia "
+            "davvero lo dice la verifica con i prezzi alla pompa qui sotto. Non è un consiglio di investimento."
+        )
+
+
+        st.markdown("**Verifica con i prezzi alla pompa in Italia**")
+        if pompa_df is None:
+            st.info("Attiva «Usa i prezzi alla pompa in Italia» nella barra laterale per questa verifica."
+                    if not usa_pompa else f"Prezzi alla pompa non disponibili: {errore_pompa}")
+        else:
+            classe_sett = sc["classe"].reindex(pompa_df.index, method="ffill")
+            tab_v, risp = bm.verifica_score_pompa(classe_sett.dropna(), pompa_df.loc[classe_sett.dropna().index])
+            st.dataframe(
+                tab_v.assign(Classe=lambda d: d["Classe"].map({"+1": "+1 rifornisci", "0": "0 neutro",
+                                                               "-1": "−1 aspetta", "Tutte": "Tutte le settimane"}))
+                .rename(columns={"Classe": "Esito", "Benzina dopo 1": "Benzina dopo 1 settimana",
+                                 "Benzina dopo 2": "Benzina dopo 2 settimane", "Gasolio dopo 1": "Gasolio dopo 1 settimana",
+                                 "Gasolio dopo 2": "Gasolio dopo 2 settimane"}),
+                hide_index=True,
+                column_config={c: st.column_config.NumberColumn(format="%+.2f", help="Variazione media del prezzo alla "
+                                                                "pompa, in centesimi al litro")
+                               for c in ["Benzina dopo 1 settimana", "Benzina dopo 2 settimane",
+                                         "Gasolio dopo 1 settimana", "Gasolio dopo 2 settimane"]},
+            )
+            r = risp.assign(**{"Volte in cui ha fatto risparmiare": 100 * risp["Volte in cui ha fatto risparmiare"],
+                               "Settimane": risp["Settimane"].map({1: "1 settimana", 2: "2 settimane"})})
+            st.dataframe(
+                r.rename(columns={"Settimane": "Confronto con", "Segnali": "Settimane con +1 o −1",
+                                  "Volte in cui ha fatto risparmiare": "Volte in cui ha fatto risparmiare (%)"}),
+                hide_index=True,
+                column_config={"Risparmio medio (€ per pieno)": st.column_config.NumberColumn(format="%+.2f €"),
+                               "Volte in cui ha fatto risparmiare (%)": st.column_config.NumberColumn(format="%.0f")},
+            )
+            st.caption(
+                "La prima tabella dice come è cambiato il prezzo medio italiano alla pompa nelle settimane dopo ogni "
+                "esito (lo score è quello del lunedì del listino). Lo score funziona se dopo un +1 la pompa sale e "
+                "dopo un −1 scende. La seconda tabella traduce tutto in euro per un pieno da 50 litri: seguendo lo "
+                "score (+1 = fare il pieno subito invece che dopo 1 o 2 settimane, −1 = aspettare) quanto si è "
+                "risparmiato in media, e quante volte. Un valore positivo vuol dire che lo score ha fatto risparmiare."
+            )
+
+with tab_pompa:
+    st.subheader("Prezzi medi alla pompa in Italia")
+    if not usa_pompa:
+        st.info("I prezzi alla pompa sono disattivati: attiva «Usa i prezzi alla pompa in Italia» nella barra laterale.")
+    elif pompa_df is None:
+        st.warning(f"Non sono riuscito a scaricare i prezzi alla pompa: {errore_pompa}")
+    else:
+        ult, pen = pompa_df.iloc[-1], pompa_df.iloc[-2]
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Benzina", f"{ult['Benzina']:.3f} € al litro", f"{100 * (ult['Benzina'] - pen['Benzina']):+.1f} cent",
+                  delta_color="inverse")
+        c2.metric("Gasolio", f"{ult['Gasolio']:.3f} € al litro", f"{100 * (ult['Gasolio'] - pen['Gasolio']):+.1f} cent",
+                  delta_color="inverse")
+        c3.metric("Listino del", f"{pompa_df.index[-1]:%d/%m/%Y}",
+                  help="I prezzi sono quelli in vigore il lunedì; la Commissione li pubblica qualche giorno dopo.")
+        inizio_p = t - pd.Timedelta(days=max(giorni_grafico, 182))
+        grafico(pompa_df.loc[inizio_p:], "Euro al litro")
+        brent_l = base["eur"].reindex(pompa_df.index, method="ffill") / LITRI_BARILE
+        grafico(brent_l.loc[inizio_p:].rename("Brent (petrolio greggio)").to_frame(), "Euro al litro")
+        st.caption("Sopra: prezzi medi nazionali con tutte le tasse. Sotto: il Brent convertito in euro al litro, cioè "
+                   "il costo della sola materia prima. La differenza sono raffinazione, distribuzione, accise e IVA.")
+
+        st.markdown("**Con quanto ritardo la pompa segue il Brent?**")
+        rit = {c: bm.ritardo_pompa(brent_l, pompa_df[c]) for c in pompa_df.columns}
+        tab_r = rit["Benzina"][["Ritardo (settimane)"]].copy()
+        for c, d in rit.items():
+            tab_r[f"{c}: correlazione"] = d["Correlazione"].values
+            tab_r[f"{c}: quota trasferita"] = d["Quota trasferita"].values
+        st.dataframe(tab_r, hide_index=True,
+                     column_config={c: st.column_config.NumberColumn(format="%.2f") for c in tab_r.columns[1:]})
+        frasi = []
+        for c, d in rit.items():
+            k = int(d.loc[d["Correlazione"].idxmax(), "Ritardo (settimane)"])
+            frasi.append(f"{ {'Benzina': 'la benzina', 'Gasolio': 'il gasolio'}[c]} reagisce soprattutto dopo **{k} settiman{'a' if k == 1 else 'e'}** e, in "
+                         f"tutto, trasferisce circa **{d['Quota trasferita'].clip(lower=0).sum():.2f}** centesimi per "
+                         "ogni centesimo di Brent")
+        st.markdown("In questi dati " + "; ".join(frasi) + ".")
+        st.caption(
+            "Per ogni ritardo, la tabella confronta la variazione del Brent in una settimana con quella della pompa "
+            "dopo 0, 1, 2… settimane. La correlazione dice quanto i due movimenti vanno insieme; la quota trasferita "
+            "dice quanti centesimi alla pompa segue ogni centesimo di Brent al litro. Fonte: EU Weekly Oil Bulletin, "
+            "Commissione Europea, raccolto da [fuel-prices.eu](https://www.fuel-prices.eu/research/) (CC BY 4.0)."
         )
 
 with tab_prev:

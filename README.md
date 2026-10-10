@@ -1,10 +1,10 @@
 # Prezzo del petrolio (Brent)
 
-App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX e il rischio geopolitico (GPR), per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
+App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
 
 ## Cosa mostra
 
-L'app ha otto schede.
+L'app ha nove schede.
 
 - **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
 - **Score rifornimento**: un adattamento dello SCORE 4.0 che dà ogni giorno uno di tre esiti.
@@ -13,11 +13,15 @@ L'app ha otto schede.
   - **0 neutro**: il Brent è vicino alla media, oppure il mercato è troppo agitato per fidarsi dello scarto.
   - La scheda mostra lo score di oggi e le sue parti, la formula e un grafico degli ultimi mesi con le soglie.
   - Una tabella mostra cosa ha fatto il Brent nei 5 giorni dopo ogni esito, su tutto lo storico.
+  - Se i prezzi alla pompa sono attivi, una verifica mostra come è cambiato il prezzo medio italiano di benzina e gasolio 1 e 2 settimane dopo ogni esito. Dice anche quanto si sarebbe risparmiato in media, per pieno da 50 litri, seguendo lo score.
 - **Prossimi 5 giorni**: grafico con il prezzo delle ultime settimane e, tratteggiata, la previsione per i prossimi 5 giorni di borsa, in euro o in dollari.
   - La linea tratteggiata resta al prezzo di oggi, perché la direzione del Brent non si può prevedere dal passato.
   - Attorno ci sono due fasce: dove il prezzo dovrebbe trovarsi in circa 2 casi su 3 e in circa 19 casi su 20. Si allargano giorno dopo giorno.
   - L'ampiezza delle fasce viene dalla previsione dell'oscillazione (modello «+ agitazione e OVX», giorno per giorno, finestra di 20 giorni) e non dipende da «Raggruppa i prezzi».
   - Una tabella riporta gli stessi valori giorno per giorno.
+- **Pompa (Italia)**: prezzi medi nazionali settimanali di benzina e gasolio, tasse incluse, dal Weekly Oil Bulletin della Commissione Europea.
+  - Ultimo listino con la variazione rispetto alla settimana prima, e grafico accanto al Brent convertito in euro al litro.
+  - Tabella del ritardo: per 0–4 settimane, quanto la variazione della pompa segue quella del Brent (correlazione) e quanti centesimi alla pompa segue ogni centesimo di Brent (quota trasferita). Una frase riassume dopo quante settimane reagisce la pompa e quanto trasferisce in tutto.
 - **Andamento**: di quanto il prezzo è salito o sceso in ogni giorno o settimana, con un riepilogo:
   - movimento complessivo, variazione tipica, salita e discesa più grandi;
   - quanto è stato lineare l'andamento;
@@ -58,6 +62,7 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 | Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
 | Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
 | Usa il rischio geopolitico (GPR) | Scarica il GPR e lo aggiunge alle previsioni | Geopolitica, Prova di previsione, Oscillazione attesa |
+| Usa i prezzi alla pompa in Italia | Scarica i prezzi settimanali di benzina e gasolio | Pompa (Italia), Score rifornimento |
 | Sensibilità alla turbolenza (α) | Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale | Score rifornimento |
 | Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento |
 | Mostra in (dentro la scheda) | Euro o dollari | Prossimi 5 giorni |
@@ -77,7 +82,8 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 - La *stabilità* vale 1 con mercato calmo. Quando l'oscillazione attesa supera quella normale scende verso 0 e avvicina lo score a «neutro».
 - Per regolarlo: se nella tabella storica +1 e −1 si comportano quasi come «Tutti i giorni», alza θ. I segnali diventano più rari ma più netti. Abbassa α se vuoi che lo score resti attivo anche nei periodi agitati.
 - Lo score riguarda il Brent: la scelta del distributore dipende anche dai prezzi locali, che l'app non conosce.
-- Nella tabella storica, il segnale è coerente se dopo un +1 il Brent è salito più spesso della media di tutti i giorni e dopo un −1 meno spesso. La tabella guarda solo il Brent: i prezzi alla pompa non sono fra i dati dell'app, quindi non dice quanto si risparmia davvero.
+- Nella tabella storica, il segnale è coerente se dopo un +1 il Brent è salito più spesso della media di tutti i giorni e dopo un −1 meno spesso. Questa tabella guarda solo il Brent.
+- La verifica con i prezzi alla pompa è la prova vera. Lo score funziona se dopo un +1 la pompa è salita e dopo un −1 è scesa. Il *risparmio medio per pieno* è positivo se seguirlo ha fatto spendere meno: con +1 si fa il pieno subito invece che 1 o 2 settimane dopo, con −1 si aspetta. Conta anche quante volte ha fatto risparmiare, non solo la media.
 
 **Prossimi 5 giorni**
 
@@ -105,6 +111,8 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 - **Score rifornimento**: S = ln(Pₜ / P̄₃₀) / (σ·√5) · e^(−α·max(0, σ/σ_norm − 1)). Pₜ è il Brent in euro di oggi e P̄₃₀ la media degli ultimi 30 giorni di calendario. σ è l'oscillazione attesa al giorno (modello «+ agitazione e OVX») e σ_norm l'oscillazione tipica osservata fino a quel giorno. È lo SCORE 4.0 riadattato: il rapporto fra prezzo e media prende il posto del rapporto fra tempo di riferimento e tempo effettivo, σ√5 fa da normalizzazione e l'esponenziale è la stabilità. Per i giorni passati σ viene calcolata con il modello riaddestrato ogni mese, senza guardare il futuro.
 - **Fasce dei prossimi 5 giorni**: con oscillazione attesa σ al giorno, dopo k giorni la fascia va da P·e^(−zσ√k) a P·e^(zσ√k), con z = 1 (2 casi su 3) e z = 1.96 (19 su 20). In dollari si usa la stessa ampiezza in percentuale.
 - **OVX**: è una volatilità annua in %. Per confrontarlo con l'oscillazione per periodo si divide per √252 (giorni) o √52 (settimane).
+- **Ritardo della pompa**: sulle serie settimanali allineate al lunedì del listino, la variazione del Brent in €/litro nella settimana w si confronta con quella della pompa nella settimana w+k, per k da 0 a 4. La quota trasferita è la pendenza della retta; la somma delle quote positive dice quanto passa in tutto alla pompa.
+- **Verifica dello score sulla pompa**: per ogni listino si prende l'esito dello score del lunedì (o dell'ultimo giorno di borsa prima). Il risparmio per pieno è 50 × esito × (prezzo dopo h settimane − prezzo di oggi), mediato sulle settimane con +1 o −1.
 - **GPR**: nei dati per prevedere entra il logaritmo della media degli ultimi 7 giorni di calendario, oppure della media della settimana. Quando gli ultimi giorni non sono ancora pubblicati si usa l'ultimo valore disponibile, per al massimo 10 giorni di borsa.
 - **Temperatura rispetto al normale**: il normale è la media dello stesso giorno dell'anno su tutti gli anni disponibili, smussata su 31 giorni.
 
@@ -121,7 +129,8 @@ L'app si apre nel browser all'indirizzo http://localhost:8501. Deve poter raggiu
 
 - Yahoo Finance (`query1.finance.yahoo.com`, `query2.finance.yahoo.com`, `fc.yahoo.com`) per i prezzi e l'OVX;
 - Open-Meteo (`archive-api.open-meteo.com`, `api.open-meteo.com`) per le temperature. Se Open-Meteo non risponde, l'app funziona lo stesso senza la temperatura;
-- `www.matteoiacoviello.com` per il rischio geopolitico (GPR). Anche senza GPR l'app funziona.
+- `www.matteoiacoviello.com` per il rischio geopolitico (GPR). Anche senza GPR l'app funziona;
+- `www.fuel-prices.eu` per i prezzi settimanali alla pompa in Italia. Anche senza, l'app funziona.
 
 ### Su Streamlit Community Cloud
 
@@ -133,7 +142,7 @@ Dopo un aggiornamento che cambia sia `app.py` sia `brent_math.py`, Streamlit pu�
 
 | File | Contenuto |
 |---|---|
-| `app.py` | L'interfaccia: download di prezzi, OVX, GPR e temperature, schede, grafici e testi. |
+| `app.py` | L'interfaccia: download di prezzi, OVX, GPR, temperature e prezzi alla pompa, schede, grafici e testi. |
 | `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione, score di rifornimento e prova a finestre scorrevoli. Non dipende da Streamlit. |
 | `requirements.txt` | Le librerie Python necessarie. |
 | `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
@@ -142,6 +151,7 @@ Dopo un aggiornamento che cambia sia `app.py` sia `brent_math.py`, Streamlit pu�
 
 - **Fonti**: contratto future sul Brent `BZ=F` (dollari al barile) e cambio `EURUSD=X`, scaricati con [yfinance](https://github.com/ranaroussi/yfinance) per tutto lo storico disponibile e aggiornati al massimo ogni 15 minuti.
 - **OVX**: CBOE Crude Oil Volatility Index (`^OVX` su Yahoo Finance), disponibile dal 2007. È la volatilità a 30 giorni attesa dalle opzioni sul petrolio WTI americano, che si muove quasi insieme al Brent. Se non si scarica, l'app continua senza.
+- **Prezzi alla pompa**: prezzi medi nazionali settimanali di Euro-super 95 e gasolio in Italia, tasse incluse, in vigore il lunedì. Vengono dal Weekly Oil Bulletin della Commissione Europea, ripubblicato in un unico file Parquet da fuel-prices.eu, che lo controlla cella per cella sul file storico ufficiale. Attribuzione richiesta: «EU Weekly Oil Bulletin, European Commission; compiled by fuel-prices.eu», licenza CC BY 4.0. Il listino esce qualche giorno dopo il lunedì. Per leggere il Parquet serve `pyarrow`, che arriva con Streamlit.
 - **GPR**: Geopolitical Risk Index giornaliero (`data_gpr_daily_recent.xls`) di D. Caldara e M. Iacoviello, «Measuring Geopolitical Risk», *American Economic Review*, 2022, da [matteoiacoviello.com](https://www.matteoiacoviello.com/gpr.htm). Conta la quota di articoli di 10 grandi giornali su guerre, terrorismo e tensioni internazionali; parte dal 1985 ed è aggiornato dagli autori con qualche giorno di ritardo. Gli autori chiedono di citare l'articolo e il sito, con la data di scaricamento. Per leggere il file serve la libreria `xlrd`.
 - **Meteo**: temperatura media giornaliera da [Open-Meteo.com](https://open-meteo.com), licenza CC BY 4.0, aggiornata al massimo ogni 6 ore. Lo storico arriva con qualche giorno di ritardo: gli ultimi giorni vengono dalle previsioni. L'API gratuita di Open-Meteo è per uso non commerciale e ha limiti di richieste. Se la scheda Meteo mostra un avviso, l'app continua senza temperatura.
 - **Salti fra contratti**: `BZ=F` è un contratto con scadenza mensile. Il passaggio da un contratto al successivo produce piccoli salti che non sono veri movimenti del mercato.
