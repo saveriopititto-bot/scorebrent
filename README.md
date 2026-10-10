@@ -33,14 +33,13 @@ L'app ha sei schede.
 
 ## Impostazioni
 
-Sono tutte nella barra laterale.
+Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la scheda «Prossimi 5 giorni».
 
 | Impostazione | Cosa fa | Schede |
 |---|---|---|
 | Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
-| Mostra in (dentro la scheda) | Euro o dollari | Prossimi 5 giorni |
 | Periodo mostrato nel grafico | Da 1 mese a tutto lo storico | Prezzo, Meteo |
-| Aggiorna i prezzi | Riscarica prezzi e temperature invece di usare quelli in memoria | Tutte |
+| Aggiorna i prezzi | Riscarica prezzi, OVX e temperature invece di usare quelli in memoria | Tutte |
 | Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |
 | Quanti giorni/settimane analizzare | Quanti periodi recenti mostrare nei grafici e nel riepilogo | Andamento |
 | Ampiezza della finestra mobile | Quanti periodi si guardano insieme per calcolare sigma, MAD, «chi anticipa chi» e la temperatura media | Andamento, Prova di previsione, Oscillazione attesa |
@@ -48,6 +47,7 @@ Sono tutte nella barra laterale.
 | Rialzo minimo da prevedere | 0% = basta che il prezzo salga; 2% = deve salire di più del 2% | Prova di previsione |
 | Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
 | Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
+| Mostra in (dentro la scheda) | Euro o dollari | Prossimi 5 giorni |
 
 ## Come leggere i risultati
 
@@ -89,14 +89,20 @@ streamlit run app.py
 
 L'app si apre nel browser all'indirizzo http://localhost:8501. Deve poter raggiungere:
 
-- Yahoo Finance (`query1.finance.yahoo.com`, `query2.finance.yahoo.com`, `fc.yahoo.com`) per i prezzi;
+- Yahoo Finance (`query1.finance.yahoo.com`, `query2.finance.yahoo.com`, `fc.yahoo.com`) per i prezzi e l'OVX;
 - Open-Meteo (`archive-api.open-meteo.com`, `api.open-meteo.com`) per le temperature. Se Open-Meteo non risponde, l'app funziona lo stesso senza la temperatura.
+
+### Su Streamlit Community Cloud
+
+L'app si pubblica scegliendo questo repository, il branch `main` e il file `app.py`; le librerie vengono installate da `requirements.txt`.
+
+Dopo un aggiornamento che cambia sia `app.py` sia `brent_math.py`, Streamlit può ricaricare solo `app.py` e tenere in memoria la versione vecchia di `brent_math.py`. Ne nasce un errore come `got an unexpected keyword argument`. In quel caso basta riavviare l'app: **Manage app → ⋮ → Reboot app**.
 
 ## File
 
 | File | Contenuto |
 |---|---|
-| `app.py` | L'interfaccia: download di prezzi e temperature, schede, grafici e testi. |
+| `app.py` | L'interfaccia: download di prezzi, OVX e temperature, schede, grafici e testi. |
 | `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione e prova a finestre scorrevoli. Non dipende da Streamlit. |
 | `requirements.txt` | Le librerie Python necessarie. |
 | `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy». |
