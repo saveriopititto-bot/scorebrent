@@ -164,6 +164,8 @@ Ogni giorno lo score di rifornimento viene scritto nella tabella `brent_score` d
    - `SUPABASE_SERVICE_ROLE_KEY`: la chiave `service_role` dalla stessa pagina. È una chiave segreta: va solo nei segreti di GitHub, mai in FuelMode, nell'app o nel codice.
 3. **Caricare lo storico**: in GitHub, *Actions → Esporta score in Supabase → Run workflow*, con «giorni» = `0`. Scrive tutti i giorni dal 2015 circa.
 
+Questi passaggi sono già fatti: la tabella esiste, i segreti sono configurati e lo storico è caricato (prima esecuzione: 2852 righe). Servono di nuovo solo se si cambia progetto Supabase.
+
 Da quel momento il workflow (`.github/workflows/esporta-score.yml`) parte da solo dal lunedì al venerdì alle 22:30 UTC, dopo la chiusura del Brent. Ogni volta invia gli ultimi 5 giorni, così recupera anche un giorno saltato. Le righe già presenti vengono aggiornate, non duplicate.
 
 ### Colonne della tabella `brent_score`
@@ -183,7 +185,7 @@ Da quel momento il workflow (`.github/workflows/esporta-score.yml`) parte da sol
 
 ### Leggere lo score da FuelMode
 
-FuelMode ([fuelmode.streamlit.app](https://fuelmode.streamlit.app/), repository test3) lo legge già. Nella scheda «Risultato» c'è il riquadro «Il petrolio nei prossimi giorni», con l'esito (Rifornisci / Neutro / Aspetta), il Brent in euro e lo scarto dalla media dei 30 giorni. Il riquadro è solo informativo: non cambia il verdetto di FuelMode. Per attivarlo, nei Secrets dell'app FuelMode su Streamlit Cloud (*Manage app → ⋮ → Settings → Secrets*) servono:
+FuelMode ([fuelmode.streamlit.app](https://fuelmode.streamlit.app/), repository [test3](https://github.com/saveriopititto-bot/test3)) lo legge già, e il collegamento è attivo. Nella scheda «Risultato» c'è il riquadro «Il petrolio nei prossimi giorni», con l'esito (Rifornisci / Neutro / Aspetta), il Brent in euro e lo scarto dalla media dei 30 giorni. Il riquadro è solo informativo: non cambia il verdetto di FuelMode. Per attivarlo, nei Secrets dell'app FuelMode su Streamlit Cloud (*Manage app → ⋮ → Settings → Secrets*) servono:
 
 ```toml
 SUPABASE_URL = "https://<progetto>.supabase.co"
