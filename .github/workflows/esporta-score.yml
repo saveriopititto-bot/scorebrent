@@ -1,0 +1,42 @@
+name: Esporta score in Supabase
+
+on:
+  schedule:
+    # Lunedì-venerdì alle 22:30 UTC, dopo la chiusura del Brent.
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      giorni:
+        description: "Quanti giorni (gli ultimi) inviare; 0 = tutto lo storico"
+        required: false
+        default: "5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esporta-score
+  cancel-in-progress: false
+
+jobs:
+  esporta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-export.txt
+
+      - name: Installa le librerie
+        run: pip install -r requirements-export.txt
+
+      - name: Calcola e invia lo score
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GIORNI: ${{ inputs.giorni || '5' }}
+        run: python esporta_score.py --giorni "$GIORNI"
