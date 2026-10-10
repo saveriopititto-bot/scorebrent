@@ -2,13 +2,21 @@
 
 App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici.
 
+## Da dove partire
+
+1. **Score rifornimento**: l'indicazione di oggi (+1 rifornisci, 0 neutro, −1 aspetta). In fondo alla scheda c'è la verifica con i prezzi veri alla pompa, che dice se seguirlo ha fatto risparmiare.
+2. **Prossimi 5 giorni**: fin dove può arrivare il Brent nei prossimi giorni.
+3. **Pompa (Italia)**: i prezzi medi di benzina e gasolio, e dopo quante settimane seguono il Brent.
+
+Le altre schede servono ad approfondire: andamento del prezzo, meteo, geopolitica e le prove dei modelli di previsione.
+
 ## Cosa mostra
 
 L'app ha nove schede.
 
 - **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
 - **Score rifornimento**: un adattamento dello SCORE 4.0 che dà ogni giorno uno di tre esiti.
-  - **+1 rifornisci**: il Brent è sopra la media degli ultimi 30 giorni più di quanto spieghi il suo normale oscillare. I prezzi alla pompa tendono a seguirlo con qualche giorno di ritardo, quindi conviene fare il pieno prima che salgano.
+  - **+1 rifornisci**: il Brent è sopra la media degli ultimi 30 giorni più di quanto spieghi il suo normale oscillare. I prezzi alla pompa tendono a seguirlo con qualche giorno o settimana di ritardo (la scheda «Pompa (Italia)» misura quanto), quindi conviene fare il pieno prima che salgano.
   - **−1 aspetta**: il Brent è sotto la media più del normale, e la pompa tenderà a scendere.
   - **0 neutro**: il Brent è vicino alla media, oppure il mercato è troppo agitato per fidarsi dello scarto.
   - La scheda mostra lo score di oggi e le sue parti, la formula e un grafico degli ultimi mesi con le soglie.
@@ -53,7 +61,7 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 |---|---|---|
 | Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
 | Periodo mostrato nel grafico | Da 1 mese a tutto lo storico | Prezzo, Meteo |
-| Aggiorna i prezzi | Riscarica prezzi, OVX, GPR e temperature invece di usare quelli in memoria | Tutte |
+| Aggiorna i prezzi | Riscarica prezzi, OVX, GPR, temperature e prezzi alla pompa invece di usare quelli in memoria | Tutte |
 | Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |
 | Quanti giorni/settimane analizzare | Quanti periodi recenti mostrare nei grafici e nel riepilogo | Andamento |
 | Ampiezza della finestra mobile | Quanti periodi si guardano insieme per calcolare sigma, MAD, «chi anticipa chi» e la temperatura media | Andamento, Prova di previsione, Oscillazione attesa |
@@ -84,6 +92,12 @@ Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la sche
 - Lo score riguarda il Brent: la scelta del distributore dipende anche dai prezzi locali, che l'app non conosce.
 - Nella tabella storica, il segnale è coerente se dopo un +1 il Brent è salito più spesso della media di tutti i giorni e dopo un −1 meno spesso. Questa tabella guarda solo il Brent.
 - La verifica con i prezzi alla pompa è la prova vera. Lo score funziona se dopo un +1 la pompa è salita e dopo un −1 è scesa. Il *risparmio medio per pieno* è positivo se seguirlo ha fatto spendere meno: con +1 si fa il pieno subito invece che 1 o 2 settimane dopo, con −1 si aspetta. Conta anche quante volte ha fatto risparmiare, non solo la media.
+
+**Pompa (Italia)**
+
+- Nella tabella del ritardo, la riga con la correlazione più alta dice dopo quante settimane la pompa reagisce al Brent. Una correlazione vicina a 0 vuol dire che a quel ritardo non c'è legame.
+- La *quota trasferita* dice quanti centesimi alla pompa segue ogni centesimo di Brent al litro. Sommata sui vari ritardi è di solito sotto 1: accise e costi fissi non seguono il petrolio.
+- Il grafico del Brent in €/litro mostra il costo della sola materia prima. La distanza dal prezzo alla pompa sono tasse, raffinazione e distribuzione.
 
 **Prossimi 5 giorni**
 
