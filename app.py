@@ -1,8 +1,10 @@
 """App «Prezzo del petrolio»: Brent da Yahoo Finance e analisi del suo andamento
-(matematica del paper "sisma", in brent_math.py). Avvio: `streamlit run app.py`."""
+(matematica del paper "sisma", in brent_math.py), con la temperatura in Europa da
+Open-Meteo come possibile dato di previsione. Avvio: `streamlit run app.py`."""
 import altair as alt
 import numpy as np
 import pandas as pd
+import requests
 import streamlit as st
 import yfinance as yf
 
@@ -20,7 +22,20 @@ NOMI_INSIEMI = {
     "+ coseno": "+ quanto prezzo e agitazione si muovono insieme",
     "+ area di Lévy": "+ chi anticipa chi",
     "Tutto": "Tutti i dati insieme",
+    "+ meteo": "+ temperatura in Europa",
+    "Tutto + meteo": "Tutti i dati + temperatura in Europa",
 }
+
+# Città europee di cui si fa la media della temperatura (latitudine, longitudine).
+CITTA = {
+    "Berlino": (52.52, 13.41),
+    "Parigi": (48.86, 2.35),
+    "Londra": (51.51, -0.13),
+    "Milano": (45.46, 9.19),
+    "Madrid": (40.42, -3.70),
+}
+METEO_STORICO = "https://archive-api.open-meteo.com/v1/archive"
+METEO_RECENTE = "https://api.open-meteo.com/v1/forecast"
 
 
 @st.cache_data(ttl=900, show_spinner="Scarico i prezzi da Yahoo Finance…")
@@ -31,6 +46,36 @@ def scarica(ticker: str) -> pd.DataFrame:
     d = d[["High", "Low", "Close"]].dropna()
     d.index = d.index.tz_localize(None).normalize()
     return d
+
+
+def _temperature(url: str, **params) -> pd.DataFrame:
+    """Temperatura media giornaliera (°C) delle CITTA: una colonna per città."""
+    lat, lon = zip(*CITTA.values())
+    r = requests.get(url, timeout=30, params={
+        "latitude": ",".join(map(str, lat)), "longitude": ",".join(map(str, lon)),
+        "daily": "temperature_2m_mean", "timezone": "Europe/Berlin", **params,
+    })
+    r.raise_for_status()
+    js = r.json()
+    luoghi = js if isinstance(js, list) else [js]  # con una sola città Open-Meteo restituisce un oggetto
+    return pd.DataFrame({
+        nome: pd.Series(l["daily"]["temperature_2m_mean"], index=pd.to_datetime(l["daily"]["time"]), dtype=float)
+        for nome, l in zip(CITTA, luoghi)
+    })
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner="Scarico le temperature da Open-Meteo…")
+def scarica_meteo(inizio: pd.Timestamp, fine: pd.Timestamp) -> pd.Series:
+    """Temperatura media delle CITTA giorno per giorno. Lo storico di Open-Meteo arriva con alcuni
+    giorni di ritardo: gli ultimi giorni vengono dalle previsioni, che includono il passato recente."""
+    fine_storico = max(inizio, fine - pd.Timedelta(days=7))  # oltre, lo storico non è ancora pubblicato
+    storico = _temperature(METEO_STORICO, start_date=f"{inizio:%Y-%m-%d}", end_date=f"{fine_storico:%Y-%m-%d}")
+    recente = _temperature(METEO_RECENTE, past_days=31, forecast_days=1)
+    t = storico.combine_first(recente).loc[:fine]
+    media = t.mean(axis=1).where(t.notna().sum(axis=1) >= 3)  # almeno 3 città su 5
+    if media.dropna().empty:
+        raise ValueError("Open-Meteo non ha restituito temperature")
+    return media.dropna()
 
 
 def aggrega(base: pd.DataFrame, freq: str) -> pd.DataFrame:
@@ -78,6 +123,9 @@ w = sb.slider(f"Ampiezza della finestra mobile ({unita})", 5, 60, 20,
 orizzonte = sb.slider(f"Quanto avanti prevedere ({unita})", 1, 20, 5)
 soglia = sb.number_input("Rialzo minimo da prevedere (%)", value=0.0, step=0.5,
                          help="0% = basta che il prezzo salga; 2% = deve salire di più del 2%.")
+usa_meteo = sb.checkbox("Usa la temperatura in Europa", value=True,
+                        help=f"Media di {', '.join(CITTA)}, da Open-Meteo. Serve per la scheda «Meteo» e per "
+                             "provare se il caldo o il freddo aiutano a prevedere il prezzo.")
 
 # --------------------------------------------------------------------------
 # Dati
@@ -106,7 +154,15 @@ d_usd = ora["usd"] / prima["usd"] - 1
 d_eur = ora["eur"] / prima["eur"] - 1
 d_clip = max(-0.10, min(0.10, d_eur))
 
-tab1, tab2, tab3 = st.tabs(["Prezzo", "Andamento", "Prova di previsione"])
+# Temperatura rispetto al normale stagionale (°C); None se disattivata o non disponibile.
+anomalia, errore_meteo = None, None
+if usa_meteo:
+    try:
+        anomalia = bm.anomalia_stagionale(scarica_meteo(base.index[0], t))
+    except Exception as e:
+        errore_meteo = str(e)
+
+tab1, tab2, tab3, tab4 = st.tabs(["Prezzo", "Andamento", "Meteo", "Prova di previsione"])
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
@@ -130,6 +186,10 @@ with tab1:
 bins = aggrega(base, freq)
 x = np.log(bins["eur"].to_numpy())                                   # livello: ln prezzo in euro
 y = np.log1p(100 * (bins["high"] / bins["low"] - 1)).to_numpy()      # agitazione: ln(1 + escursione % fra massimo e minimo)
+m = None                                                             # meteo: anomalia di temperatura nei periodi
+if anomalia is not None:
+    m_bin = anomalia if freq == "Giorno per giorno" else anomalia.resample("W-FRI").mean()
+    m = m_bin.reindex(bins.index).to_numpy()
 
 # --------------------------------------------------------------------------
 # Scheda 2 - Andamento
@@ -192,19 +252,45 @@ with tab2:
     )
 
 # --------------------------------------------------------------------------
-# Scheda 3 - Prova di previsione
+# Scheda 3 - Meteo
 # --------------------------------------------------------------------------
 with tab3:
+    st.subheader("Fa più caldo o più freddo del normale in Europa?")
+    if not usa_meteo:
+        st.info("La temperatura è disattivata: attiva «Usa la temperatura in Europa» nella barra laterale.")
+    elif anomalia is None:
+        st.warning(f"Non sono riuscito a scaricare le temperature da Open-Meteo: {errore_meteo}")
+    else:
+        c1, c2 = st.columns(2)
+        c1.metric(f"Ultimo giorno ({anomalia.index[-1]:%d/%m/%Y})", f"{anomalia.iloc[-1]:+.1f} °C rispetto al normale")
+        c2.metric("Media degli ultimi 30 giorni", f"{anomalia.iloc[-30:].mean():+.1f} °C rispetto al normale")
+        inizio_g = t - pd.Timedelta(days=giorni_grafico)
+        grafico(anomalia.rolling(7, min_periods=4).mean().loc[inizio_g:].rename("Media su 7 giorni").to_frame(),
+                "°C rispetto al normale")
+        grafico(base.loc[inizio_g:, ["eur"]].rename(columns={"eur": "Euro al barile"}), "Prezzo al barile")
+        st.caption(
+            f"Temperatura media di {', '.join(CITTA)}. Il «normale» è la media dello stesso periodo dell'anno negli "
+            "ultimi 5 anni: sopra zero fa più caldo del solito, sotto zero più freddo. In teoria un inverno più freddo "
+            "fa consumare più gasolio da riscaldamento e può spingere il prezzo; la scheda «Prova di previsione» "
+            "verifica se succede davvero. Dati meteo: [Open-Meteo.com](https://open-meteo.com) (licenza CC BY 4.0)."
+        )
+
+# --------------------------------------------------------------------------
+# Scheda 4 - Prova di previsione
+# --------------------------------------------------------------------------
+with tab4:
     st.subheader("L'andamento passato aiuta a prevedere il prezzo?")
     st.markdown(
         f"Domanda: il prezzo in euro salirà di oltre **{soglia:.1f}%** nei prossimi **{orizzonte} {unita}**? "
         "Il modello impara sul primo 60% dei dati (periodo di studio) e viene messo alla prova sul restante 40% "
         "(periodo di verifica), che non ha mai visto. Il confronto è con una **stima di riferimento** che non guarda "
         "il passato recente e dà sempre la stessa probabilità: quanto spesso il prezzo è salito nel periodo di studio."
+        + (f" Le righe con la temperatura usano la media della temperatura rispetto al normale sugli ultimi {w} {unita}."
+           if m is not None else "")
     )
     if st.button("Esegui la prova"):
         try:
-            feat = bm.costruisci_features(x, y, w, orizzonte)
+            feat = bm.costruisci_features(x, y, w, orizzonte, meteo=m)
             res, meta = bm.validazione(feat, orizzonte, soglia / 100)
         except Exception as e:
             st.error(str(e))
