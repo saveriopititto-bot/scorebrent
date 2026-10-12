@@ -31,24 +31,23 @@ class SchedaOscillazione(Scheda):
         previsione = PrevisioneOscillazione(imp.w, orizzonte, passo=imp.freq.passo)
         st.subheader(f"Quanto si muoverà il prezzo nei prossimi {orizzonte} {unita}?")
         st.markdown(
-            "Prevedere se il prezzo salirà o scenderà è quasi impossibile; prevedere **quanto si muoverà** è molto più "
-            "fattibile, perché i periodi agitati tendono a durare. Il modello usa l'oscillazione recente (*sigma* e *MAD*, "
-            f"sugli ultimi {imp.w} {unita} e sugli ultimi 5) e l'agitazione, cioè la distanza fra massimo e minimo"
-            + (", più la volatilità attesa dal mercato (OVX)" if serie.o is not None else "")
-            + (". Nella prova c'è anche un modello con il rischio geopolitico (GPR)." if serie.g is not None else ".")
+            "**Quanto si muoverà** il prezzo è molto più prevedibile della direzione, perché i periodi agitati tendono "
+            f"a durare. Il modello usa l'oscillazione recente (*sigma* e *MAD*, sugli ultimi {imp.w} e 5 {unita}), "
+            "l'agitazione (massimo − minimo)" + (" e la volatilità attesa dal mercato (OVX)." if serie.o is not None else ".")
         )
         if ctx.ovx.attivo and serie.o is None:
             st.warning(f"Non sono riuscito a scaricare l'OVX, continuo senza: {ctx.ovx.errore}")
         feat = previsione.features(serie.x, serie.y, **serie.esterni)
+        modello = previsione.modello_predefinito(serie.o is not None)
         try:
-            attesa = 100 * previsione.prevedi(feat, previsione.INSIEMI[previsione.modello_predefinito(serie.o is not None)])
+            attesa = 100 * previsione.prevedi(feat, previsione.INSIEMI[modello])
         except Exception as e:
             st.error(str(e))
         else:
-            self._oggi(attesa, feat, orizzonte, unita, al_periodo)
+            self._oggi(attesa, modello, feat, orizzonte, unita, al_periodo)
 
-        st.markdown("**Quanto è affidabile?** La prova usa le stesse finestre scorrevoli della scheda «Prova di "
-                    "previsione» e confronta i modelli con riferimenti semplici.")
+        st.markdown("**Quanto è affidabile?** Stessa prova a finestre scorrevoli della «Prova di previsione», contro "
+                    "riferimenti semplici.")
         if st.button("Esegui la prova dell'oscillazione"):
             try:
                 with st.spinner("Eseguo la prova su tutto lo storico…"):
@@ -58,14 +57,15 @@ class SchedaOscillazione(Scheda):
             else:
                 self._risultati(prova, unita, al_periodo)
 
-    def _oggi(self, attesa: float, feat, orizzonte: int, unita: str, al_periodo: str) -> None:
+    def _oggi(self, attesa: float, modello: str, feat, orizzonte: int, unita: str, al_periodo: str) -> None:
         ora = self.ctx.confronto.ora
         normale = 100 * float(np.exp(feat["bersaglio"].median()))
         escursione = attesa * np.sqrt(orizzonte)
         c1, c2, c3 = st.columns(3)
         c1.metric("Oscillazione attesa", f"{attesa:.2f}% {al_periodo}",
                   f"{attesa - normale:+.2f} punti rispetto al normale", delta_color="inverse",
-                  help=f"Il normale è l'oscillazione tipica (mediana) di tutto lo storico: {normale:.2f}% {al_periodo}.")
+                  help=f"Modello «{self.NOMI[modello].removeprefix('Modello: ')}». Il normale è la mediana di tutto lo "
+                       f"storico: {normale:.2f}% {al_periodo}.")
         c2.metric(f"Movimento probabile in {orizzonte} {unita}", f"±{escursione:.1f}%",
                   help="In circa 2 casi su 3 la variazione complessiva del prezzo resta dentro questo intervallo; "
                        "nel restante terzo va oltre, in su o in giù.")
@@ -74,10 +74,9 @@ class SchedaOscillazione(Scheda):
         if self.ctx.ovx.disponibile:
             ovx_oggi = self.ctx.ovx.valore.dropna()
             st.caption(
-                f"OVX al {ovx_oggi.index[-1]:%d/%m/%Y}: **{ovx_oggi.iloc[-1]:.1f}**, cioè il mercato si aspetta "
-                f"un'oscillazione di circa {ovx_oggi.iloc[-1] / np.sqrt(self.imp.freq.periodi_anno):.2f}% {al_periodo}. "
-                "L'OVX è calcolato sulle opzioni del petrolio WTI americano, che si muove quasi insieme al Brent. "
-                "La previsione in alto usa il modello «+ agitazione e OVX»."
+                f"OVX al {ovx_oggi.index[-1]:%d/%m/%Y}: **{ovx_oggi.iloc[-1]:.1f}**, cioè il mercato delle opzioni si "
+                f"aspetta circa {ovx_oggi.iloc[-1] / np.sqrt(self.imp.freq.periodi_anno):.2f}% {al_periodo}. È calcolato "
+                "sul WTI americano, che si muove quasi insieme al Brent."
             )
 
     def _risultati(self, prova: ProvaOscillazione, unita: str, al_periodo: str) -> None:

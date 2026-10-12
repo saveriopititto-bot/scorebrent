@@ -6,12 +6,12 @@ from typing import ClassVar
 
 import streamlit as st
 
-from ..contesto import Contesto
+from ..contesto import Contesto, DatoFacoltativo
 from ..impostazioni import Impostazioni
 
 
 class Scheda(ABC):
-    """Una scheda dell'app: il titolo va nella barra delle schede, `mostra` ne disegna il contenuto."""
+    """Una scheda dell'app: il titolo è il suo bottone nel menù, `mostra` ne disegna il contenuto."""
 
     titolo: ClassVar[str]
 
@@ -31,3 +31,12 @@ class Scheda(ABC):
             self.mostra()
         except Exception as e:
             st.exception(e)
+
+    @staticmethod
+    def manca(dato: DatoFacoltativo, interruttore: str, cosa: str) -> bool:
+        """Se il dato non c'è dice perché (disattivato o non scaricato) e restituisce True."""
+        if not dato.attivo:
+            st.info(f"Per questa parte attiva «{interruttore}» in «Dati», nella barra laterale.")
+        elif not dato.disponibile:
+            st.warning(f"Non sono riuscito a scaricare {cosa}: {dato.errore}")
+        return not dato.disponibile

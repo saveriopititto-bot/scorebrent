@@ -56,8 +56,9 @@ class FonteMeteo:
         js = r.json()
         luoghi = js if isinstance(js, list) else [js]  # con una sola città Open-Meteo restituisce un oggetto
         return pd.DataFrame({
-            nome: pd.Series(l["daily"]["temperature_2m_mean"], index=pd.to_datetime(l["daily"]["time"]), dtype=float)
-            for nome, l in zip(self.citta, luoghi)
+            nome: pd.Series(luogo["daily"]["temperature_2m_mean"], index=pd.to_datetime(luogo["daily"]["time"]),
+                            dtype=float)
+            for nome, luogo in zip(self.citta, luoghi)
         })
 
     def scarica(self, inizio: pd.Timestamp, fine: pd.Timestamp) -> pd.Series:

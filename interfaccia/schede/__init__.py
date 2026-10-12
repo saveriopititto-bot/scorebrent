@@ -1,4 +1,8 @@
-"""Le schede dell'app, nell'ordine della barra delle schede."""
+"""Le schede dell'app, raggruppate nelle sezioni del menù."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 from .andamento import SchedaAndamento
 from .base import Scheda
 from .formule import SchedaFormule
@@ -11,9 +15,21 @@ from .prossimi import SchedaProssimi
 from .prova import SchedaProva
 from .score import SchedaScore
 
-SCHEDE: tuple[type[Scheda], ...] = (
-    SchedaPrezzo, SchedaScore, SchedaProssimi, SchedaPompa, SchedaAndamento, SchedaMeteo, SchedaGeopolitica,
-    SchedaProva, SchedaOscillazione, SchedaFormule,
-)
 
-__all__ = ["SCHEDE", "Scheda", *(s.__name__ for s in SCHEDE)]
+@dataclass(frozen=True)
+class Sezione:
+    """Un bottone del menù: le sue schede compaiono sotto, nell'ordine dato."""
+
+    nome: str  # anche il valore nell'indirizzo, es. ?sezione=Mercato
+    schede: tuple[type[Scheda], ...]
+
+
+SEZIONI: tuple[Sezione, ...] = (
+    Sezione("Rifornimento", (SchedaScore, SchedaProssimi, SchedaPompa)),
+    Sezione("Mercato", (SchedaPrezzo, SchedaAndamento, SchedaMeteo, SchedaGeopolitica)),
+    Sezione("Modelli", (SchedaProva, SchedaOscillazione, SchedaFormule)),
+)
+SCHEDE: tuple[type[Scheda], ...] = tuple(s for sezione in SEZIONI for s in sezione.schede)
+
+__all__ = ["SCHEDE", "SEZIONI", "Scheda", "SchedaAndamento", "SchedaFormule", "SchedaGeopolitica", "SchedaMeteo",
+           "SchedaOscillazione", "SchedaPompa", "SchedaPrezzo", "SchedaProssimi", "SchedaProva", "SchedaScore", "Sezione"]

@@ -23,5 +23,4 @@ class SchedaPrezzo(Scheda):
         dati_grafico = base.loc[base.index >= c.t - pd.Timedelta(days=self.imp.giorni_grafico), ["usd", "eur"]]
         Grafici.nel_tempo(dati_grafico.rename(columns={"usd": "Dollari al barile", "eur": "Euro al barile"}),
                           "Prezzo al barile")
-        st.caption("Fonte: Yahoo Finance. I prezzi possono arrivare in ritardo e non sono un consiglio di investimento. "
-                   "Un barile sono 159 litri di petrolio greggio.")
+        st.caption("Fonte: Yahoo Finance, i prezzi possono arrivare in ritardo. Un barile sono 159 litri di petrolio greggio.")

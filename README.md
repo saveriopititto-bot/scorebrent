@@ -1,20 +1,33 @@
 # Prezzo del petrolio (Brent)
 
-App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici. L'aspetto è lo stesso di [FuelMode](https://fuelmode.streamlit.app/): palette blu petrolio e arancione, font Archivo, barra laterale e contenuto in schede bianche arrotondate, schede come barra di navigazione con il nome dell'app.
+App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici. L'aspetto è lo stesso di [FuelMode](https://fuelmode.streamlit.app/): palette blu petrolio e arancione, font Archivo, barra laterale e contenuto in schede bianche arrotondate, in alto un menù con tutti i bottoni su una riga.
 
 ## Da dove partire
+
+Il menù in alto ha, sulla stessa riga, i tre bottoni delle sezioni (blu scuro quello scelto) e quelli delle schede della sezione (azzurro quella aperta). Sugli schermi stretti le schede vanno a capo.
+
+| Sezione | Schede | A cosa serve |
+|---|---|---|
+| **Rifornimento** | Score rifornimento, Prossimi 5 giorni, Pompa (Italia) | Decidere quando fare il pieno. È la sezione che si apre per prima. |
+| **Mercato** | Prezzo, Andamento, Meteo, Geopolitica | Guardare il Brent e i dati che possono muoverlo. |
+| **Modelli** | Prova di previsione, Oscillazione attesa, Formule | Capire quanto sono affidabili le previsioni e come sono calcolate. |
 
 1. **Score rifornimento**: l'indicazione di oggi (+1 rifornisci, 0 neutro, −1 aspetta). In fondo alla scheda c'è la verifica con i prezzi veri alla pompa, che dice se seguirlo ha fatto risparmiare.
 2. **Prossimi 5 giorni**: fin dove può arrivare il Brent nei prossimi giorni.
 3. **Pompa (Italia)**: i prezzi medi di benzina e gasolio, e dopo quante settimane seguono il Brent.
 
-Le altre schede servono ad approfondire: andamento del prezzo, meteo, geopolitica e le prove dei modelli di previsione.
+La sezione scelta finisce nell'indirizzo, quindi si può aprire direttamente: `?sezione=Mercato` o `?sezione=Modelli`. Ogni sezione ricorda l'ultima scheda aperta. Per andare veloce:
+
+- si calcola solo la scheda aperta;
+- i dati esterni si scaricano solo quando una scheda li usa (all'apertura, sullo score, servono solo prezzi, OVX e prezzi alla pompa; temperature e GPR arrivano aprendo le loro schede o i modelli);
+- lo score di ogni giorno resta in memoria e si ricalcola solo se cambiano i prezzi, α o θ.
 
 ## Cosa mostra
 
-L'app ha dieci schede.
+L'app ha dieci schede, divise nelle tre sezioni del menù.
 
-- **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
+### Rifornimento
+
 - **Score rifornimento**: un adattamento dello SCORE 4.0 che dà ogni giorno uno di tre esiti.
   - **+1 rifornisci**: il Brent è sopra la media degli ultimi 30 giorni più di quanto spieghi il suo normale oscillare. I prezzi alla pompa tendono a seguirlo con qualche giorno o settimana di ritardo (la scheda «Pompa (Italia)» misura quanto), quindi conviene fare il pieno prima che salgano.
   - **−1 aspetta**: il Brent è sotto la media più del normale, e la pompa tenderà a scendere.
@@ -30,6 +43,10 @@ L'app ha dieci schede.
 - **Pompa (Italia)**: prezzi medi nazionali settimanali di benzina e gasolio, tasse incluse, dal Weekly Oil Bulletin della Commissione Europea.
   - Ultimo listino con la variazione rispetto alla settimana prima, e grafico accanto al Brent convertito in euro al litro.
   - Tabella del ritardo: per 0–4 settimane, quanto la variazione della pompa segue quella del Brent (correlazione) e quanti centesimi alla pompa segue ogni centesimo di Brent (quota trasferita). Una frase riassume dopo quante settimane reagisce la pompa e quanto trasferisce in tutto.
+
+### Mercato
+
+- **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
 - **Andamento**: di quanto il prezzo è salito o sceso in ogni giorno o settimana, con un riepilogo:
   - movimento complessivo, variazione tipica, salita e discesa più grandi;
   - quanto è stato lineare l'andamento;
@@ -41,6 +58,9 @@ L'app ha dieci schede.
 - **Geopolitica**: il Geopolitical Risk Index (GPR) di Caldara e Iacoviello, accanto al grafico del prezzo.
   - Media degli ultimi 7 e 30 giorni, e la divisione fra minacce e atti; 100 è il livello medio dal 1985 al 2019.
   - Grafico delle medie su 7 e 30 giorni e tabella degli eventi principali più recenti, con le etichette originali in inglese.
+
+### Modelli
+
 - **Prova di previsione**: controlla se l'andamento passato aiuta davvero a prevedere un rialzo nei giorni o nelle settimane successive.
   - La prova procede a finestre scorrevoli su tutto lo storico. Il primo 40% serve solo per imparare; poi, ogni mese circa, il modello si riaddestra su tutto il passato e prevede il mese successivo.
   - Il risultato è confrontato con una stima di riferimento che non guarda il passato recente. Per ogni gruppo di dati si vede anche in quanti anni fa meglio del riferimento.
@@ -56,25 +76,27 @@ L'app ha dieci schede.
 
 ## Impostazioni
 
-Sono nella barra laterale, tranne la scelta della valuta, che sta dentro la scheda «Prossimi 5 giorni».
+Sono nella barra laterale, in quattro gruppi, tranne la scelta della valuta, che sta dentro la scheda «Prossimi 5 giorni».
 
-| Impostazione | Cosa fa | Schede |
-|---|---|---|
-| Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
-| Periodo mostrato nel grafico | Da 1 mese a tutto lo storico | Prezzo, Meteo |
-| Aggiorna i prezzi | Riscarica prezzi, OVX, GPR, temperature e prezzi alla pompa invece di usare quelli in memoria | Tutte |
-| Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |
-| Quanti giorni/settimane analizzare | Quanti periodi recenti mostrare nei grafici e nel riepilogo | Andamento |
-| Ampiezza della finestra mobile | Quanti periodi si guardano insieme per calcolare sigma, MAD, «chi anticipa chi» e la temperatura media | Andamento, Prova di previsione, Oscillazione attesa |
-| Quanto avanti prevedere | L'orizzonte della previsione | Prova di previsione, Oscillazione attesa |
-| Rialzo minimo da prevedere | 0% = basta che il prezzo salga; 2% = deve salire di più del 2% | Prova di previsione |
-| Usa la temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
-| Usa la volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo aggiunge alle previsioni | Prova di previsione, Oscillazione attesa, Prossimi 5 giorni |
-| Usa il rischio geopolitico (GPR) | Scarica il GPR e lo aggiunge alle previsioni | Geopolitica, Prova di previsione, Oscillazione attesa |
-| Usa i prezzi alla pompa in Italia | Scarica i prezzi settimanali di benzina e gasolio | Pompa (Italia), Score rifornimento |
-| Sensibilità alla turbolenza (α) | Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale | Score rifornimento |
-| Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento |
-| Mostra in (dentro la scheda) | Euro o dollari | Prossimi 5 giorni |
+| Gruppo | Impostazione | Cosa fa | Schede |
+|---|---|---|---|
+| Score rifornimento | Sensibilità alla turbolenza (α) | Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale | Score rifornimento |
+| | Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento |
+| Prezzo e grafici | Periodo mostrato nei grafici | Da 1 mese a tutto lo storico | Score rifornimento, Pompa (Italia), Prezzo, Meteo, Geopolitica |
+| | Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
+| Analisi | Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |
+| | Quanti giorni/settimane analizzare | Quanti periodi recenti mostrare nei grafici e nel riepilogo | Andamento |
+| | Ampiezza della finestra mobile | Quanti periodi si guardano insieme per calcolare sigma, MAD, «chi anticipa chi» e la temperatura media | Andamento, Prova di previsione, Oscillazione attesa |
+| | Quanto avanti prevedere | L'orizzonte della previsione | Prova di previsione, Oscillazione attesa |
+| | Rialzo minimo da prevedere | 0% = basta che il prezzo salga; 2% = deve salire di più del 2% | Prova di previsione |
+| Dati | Prezzi alla pompa in Italia | Scarica i prezzi settimanali di benzina e gasolio | Score rifornimento, Pompa (Italia) |
+| | Volatilità attesa dal mercato (OVX) | Scarica l'OVX e lo usa nello score e nelle previsioni | Score rifornimento, Prossimi 5 giorni, Prova di previsione, Oscillazione attesa |
+| | Temperatura in Europa | Scarica le temperature e le aggiunge alle previsioni | Meteo, Prova di previsione, Oscillazione attesa |
+| | Rischio geopolitico (GPR) | Scarica il GPR e lo aggiunge alle previsioni | Geopolitica, Prova di previsione, Oscillazione attesa |
+| | Aggiorna i dati | Riscarica prezzi, OVX, GPR, temperature e prezzi alla pompa invece di usare quelli in memoria | Tutte |
+| (nella scheda) | Mostra in | Euro o dollari | Prossimi 5 giorni |
+
+Se un dato è spento, le parti che lo usano dicono quale casella attivare in «Dati».
 
 ## Come leggere i risultati
 
@@ -257,7 +279,7 @@ Ci vuole circa un minuto. GitHub li esegue da solo (workflow «Test», `.github/
 | `test_score_pompa.py` | Formula dello score, stabilità, soglie (±θ incluse), storico e verifica; ritardo della pompa e risparmio per pieno. |
 | `test_fonti.py` | Le fonti dati: righe impossibili scartate, almeno 3 città per la temperatura, solo prezzi italiani. |
 | `test_esporta.py` | Righe per Supabase, invio a blocchi da 500, errori dell'API, riga di comando, e che il modello si importi senza Streamlit. |
-| `test_app.py` | L'app intera con il simulatore di Streamlit: tutte le schede, settimana per settimana, la pagina per FuelMode, dati esterni spenti o irraggiungibili, Yahoo irraggiungibile, un errore che resta nella sua scheda. |
+| `test_app.py` | L'app intera con il simulatore di Streamlit: il menù e le tre sezioni, settimana per settimana, la pagina per FuelMode, dati esterni spenti o irraggiungibili, Yahoo irraggiungibile, un errore che resta nella sua scheda. |
 | `test_regressione.py` | Lo score di ogni giorno (quello che va in Supabase) e le tabelle delle due prove devono restare uguali ai valori salvati in `tests/riferimenti/`. |
 
 Se una modifica al modello cambia i risultati di proposito, `test_regressione.py` fallisce: si controlla che la differenza sia quella voluta e si rigenerano i valori di riferimento con `python -m tests.riferimenti`.
@@ -278,13 +300,14 @@ Se una modifica al modello cambia i risultati di proposito, `test_regressione.py
 | `brent/score.py` | `ScoreRifornimento` (score, storico e verifica sul Brent), `Esito` (+1, 0, −1) e `StoricoScore`. |
 | `brent/pompa.py` | `AnalisiPompa`: ritardo della pompa rispetto al Brent e verifica dello score sui prezzi alla pompa. |
 | `interfaccia/` | L'interfaccia Streamlit. |
-| `interfaccia/app.py` | `App`: configura la pagina, legge le impostazioni, carica i dati e mostra le schede (o la sola scheda dello score con `?pagina=score`). |
+| `interfaccia/app.py` | `App`: configura la pagina, legge le impostazioni, carica i dati e mostra la scheda scelta (o la sola scheda dello score con `?pagina=score`). |
+| `interfaccia/menu.py` | `Menu`: i bottoni delle sezioni e delle schede su una riga, con la sezione scelta nell'indirizzo (`?sezione=`). |
 | `interfaccia/impostazioni.py` | `Impostazioni`: la barra laterale. |
-| `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py` con la cache di Streamlit. |
-| `interfaccia/contesto.py` | `Contesto`: impostazioni, dati scaricati (`DatoFacoltativo` per quelli che possono mancare) e calcoli condivisi dalle schede, come lo score. |
+| `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py` e il calcolo dello score, con la cache di Streamlit. |
+| `interfaccia/contesto.py` | `Contesto`: impostazioni, dati scaricati al primo uso (`DatoFacoltativo` per quelli che possono mancare) e calcoli condivisi dalle schede, come lo score. |
 | `interfaccia/grafici.py` | `Grafici`: i grafici nel tempo con le date in formato italiano. |
 | `interfaccia/stile.py` | `Palette` e `Stile`: lo stile di FuelMode, CSS globale e colori, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
-| `interfaccia/schede/` | Una classe per scheda, tutte figlie di `Scheda` (`base.py`): `SchedaPrezzo`, `SchedaScore`, `SchedaProssimi`, `SchedaPompa`, `SchedaAndamento`, `SchedaMeteo`, `SchedaGeopolitica`, `SchedaProva`, `SchedaOscillazione`, `SchedaFormule`. L'ordine è in `schede/__init__.py`. Se una scheda va in errore, l'errore resta dentro la scheda e le altre si vedono lo stesso. |
+| `interfaccia/schede/` | Una classe per scheda, tutte figlie di `Scheda` (`base.py`): `SchedaPrezzo`, `SchedaScore`, `SchedaProssimi`, `SchedaPompa`, `SchedaAndamento`, `SchedaMeteo`, `SchedaGeopolitica`, `SchedaProva`, `SchedaOscillazione`, `SchedaFormule`. Le sezioni del menù e l'ordine delle schede sono in `schede/__init__.py` (`SEZIONI`). Se una scheda va in errore, l'errore resta dentro la scheda e le altre si vedono lo stesso. |
 | `esporta_score.py` | `EsportazioneScore` calcola lo score e prepara le righe, `ClienteSupabase` le scrive nella tabella `brent_score` di Supabase. |
 | `supabase/brent_score.sql` | Crea la tabella `brent_score` e la regola di lettura pubblica. |
 | `.github/workflows/esporta-score.yml` | Esegue l'esportazione ogni giorno di borsa e su richiesta. |

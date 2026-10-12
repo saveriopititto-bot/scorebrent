@@ -123,7 +123,7 @@ class PrevisioneOscillazione:
         percentuali di oscillazione per bin: bias = errore medio (positivo = sovrastima), MAD = errore assoluto
         medio, sigma = deviazione standard dell'errore. Il miglioramento e gli anni vinti sono misurati contro
         «come appena passato», il riferimento piu' difficile. `anni` = anno di ogni t."""
-        f = feat.dropna(subset=["bersaglio"] + self.INSIEMI.presenti(feat.columns)).reset_index(drop=True)
+        f = feat.dropna(subset=["bersaglio", *self.INSIEMI.presenti(feat.columns)]).reset_index(drop=True)
         n = len(f)
         if n < 100:
             raise ValueError(f"Troppo pochi dati per la prova ({n} casi utili, ne servono almeno 100).")

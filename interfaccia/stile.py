@@ -15,16 +15,13 @@ class Palette:
     SKY = "#8ecae6"
     BLUE_GREEN = "#219ebc"
     DEEP = "#023047"
-    AMBER = "#ffb703"
     ORANGE = "#fb8500"
     # sfumature ricavate dalla palette
     BG = "#eef6fa"
     N100, N200, N300, N400, N500, N700 = "#f2f8fb", "#e2eef4", "#c9dde7", "#a5c2d1", "#7c9fb2", "#3a5f74"
-    A100, A600, A700 = "#fff3e6", "#e07600", "#a65600"
     # esiti dello score (verde = rifornisci, rosso = aspetta), come il cerchio di FuelMode
     VERDE, ROSSO = "#1f9d55", "#d64545"
 
-    BRAND = "🛢️ Prezzo del petrolio"
     SIDEBAR_W = 290  # larghezza fissa della barra laterale (scheda + 20px di margine sinistro)
 
 
@@ -72,13 +69,9 @@ section[data-testid="stSidebar"] > [data-testid="stSidebarContent"] {{ backgroun
 [data-testid="stSidebar"] [data-testid="stWidgetLabel"] {{ min-height: 0; margin-bottom: 0; }}
 [data-testid="stSidebar"] .stRadio [role="radiogroup"] {{ gap: 0 12px; }}
 [data-testid="stSidebar"] .stSlider {{ margin-top: -6px; margin-bottom: -8px; }}
-[data-testid="stSidebar"] .stButton button, [data-testid="stSidebar"] .stDownloadButton button {{
+[data-testid="stSidebar"] .stButton button {{
   min-height: 32px; padding: 4px 14px; }}
 [data-testid="stSidebar"] .stButton button p {{ font-size: 13px; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] summary {{ padding: 8px 12px; }}
-[data-testid="stSidebar"] [data-testid="stExpanderDetails"] {{ padding: 4px 12px 12px; }}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{ padding: 6px 8px; }}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzoneInstructions"] {{ display: none; }}
 [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{ font-size: 12px; color: {Palette.N700}; }}
 [data-testid="stSidebar"] .stRadio [data-testid="stWidgetLabel"] p {{ font-size: 12px; font-weight: 800;
   letter-spacing: .08em; text-transform: uppercase; color: {Palette.N700}; }}
@@ -100,48 +93,42 @@ section[data-testid="stSidebar"] > [data-testid="stSidebarContent"] {{ backgroun
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div:first-child {{ border-radius: 999px; }}
 [data-testid="stTooltipIcon"] svg {{ stroke: {Palette.N500}; }}
 
-/* tab come barra di navigazione (selettori per Streamlit < 1.6x e >= 1.6x) */
-.stTabs [data-baseweb="tab-list"], .stTabs [role="tablist"] {{ gap: 4px; align-items: center; flex-wrap: wrap;
-  row-gap: 10px; background: #fff; border: 0; box-shadow: var(--shadow-soft); padding: 12px 12px 12px 24px;
-  border-radius: var(--radius-lg); overflow: visible; }}
-.stTabs [data-baseweb="tab-list"]::before, .stTabs [role="tablist"]::before {{ content: "{Palette.BRAND}";
-  margin-right: auto; padding-right: 16px; font-size: 18px; font-weight: 800; letter-spacing: -0.015em; color: {Palette.DEEP}; }}
-.stTabs [data-baseweb="tab"], .stTabs [role="tab"] {{ height: auto; padding: 8px 10px; margin: 0; border: 0;
-  border-radius: 999px; background: transparent; cursor: pointer; }}
-.stTabs [role="tab"] p {{ font-size: 14px; font-weight: 600; color: {Palette.DEEP}; }}
-.stTabs [role="tab"]:hover p {{ color: {Palette.ORANGE}; }}
-.stTabs [role="tab"][aria-selected="true"] {{ background: {Palette.DEEP}; }}
-.stTabs [role="tab"][aria-selected="true"] p {{ color: #fff; }}
-.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"],
-.stTabs .react-aria-SelectionIndicator, .stTabs [role="tablist"]::after {{ display: none; }}
-/* il contenuto di ogni scheda è una scheda bianca */
-.stTabs [role="tabpanel"] {{ margin-top: 20px; padding: 24px; background: #fff; border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft); }}
+/* menù: in una scheda bianca i bottoni delle sezioni (blu scuro quando scelti) e quelli delle schede (azzurri);
+   su schermi stretti le schede vanno a capo */
+.st-key-card-menu {{ padding: 12px 16px !important; row-gap: 8px !important; column-gap: 28px !important; }}
+.st-key-card-menu [data-testid="stButtonGroup"] button {{ border: 0; border-radius: 999px !important; margin: 0 2px;
+  padding: 8px 16px; min-height: 40px; background: {Palette.N100}; color: {Palette.DEEP}; box-shadow: none; }}
+.st-key-card-menu [data-testid="stButtonGroup"] button:hover,
+.st-key-card-menu [data-testid="stButtonGroup"] button:focus-visible {{ background: {Palette.N200}; color: {Palette.ORANGE}; }}
+.st-key-card-menu [data-testid="stButtonGroup"] button p {{ font-size: 14px; font-weight: 800; color: inherit; }}
+.st-key-sezione button[aria-checked="true"], .st-key-sezione button[aria-checked="true"]:hover {{
+  background: {Palette.DEEP} !important; color: #fff !important; }}
+[class*="st-key-scheda-"] button {{ background: transparent !important; }}
+[class*="st-key-scheda-"] button p {{ font-weight: 600 !important; }}
+[class*="st-key-scheda-"] button[aria-checked="true"], [class*="st-key-scheda-"] button[aria-checked="true"]:hover {{
+  background: {Palette.SKY} !important; color: {Palette.DEEP} !important; }}
+[class*="st-key-scheda-"] button[aria-checked="true"] p {{ font-weight: 800 !important; }}
 
 /* schede */
 [class*="st-key-card"] {{ position: relative; background: #fff; border: 1px solid transparent; border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft); padding: 24px; gap: 12px !important; }}
-.x-title {{ margin: 0; font-size: 20px; line-height: 1.25; font-weight: 800; letter-spacing: -0.015em; color: {Palette.DEEP}; }}
 [class*="st-key-card"] p {{ font-size: 14px; }}
 [class*="st-key-card"] [data-testid="stCaptionContainer"] p {{ font-size: 13px; color: {Palette.N700}; }}
-[class*="st-key-card"] [data-testid="stDeckGlJsonChart"], [class*="st-key-card"] [data-testid="stDataFrame"] {{
+[class*="st-key-card"] [data-testid="stDataFrame"] {{
   border-radius: var(--radius-md); overflow: hidden; }}
 
 /* bottoni */
-.stButton button, .stDownloadButton button {{ border-radius: 999px; border: 0; padding: 10px 18px;
+.stButton button {{ border-radius: 999px; border: 0; padding: 10px 18px;
   font-weight: 800; min-height: 40px; }}
-.stButton button p, .stDownloadButton button p {{ font-weight: 800; font-size: 14px; }}
-.stButton button[kind="primary"] {{ background: {Palette.ORANGE}; color: {Palette.DEEP}; }}
-.stButton button[kind="primary"]:hover {{ background: {Palette.A600}; color: {Palette.DEEP}; }}
-.stButton button[kind="secondary"], .stDownloadButton button {{ background: {Palette.N200}; color: {Palette.DEEP}; }}
-.stButton button[kind="secondary"]:hover, .stDownloadButton button:hover {{ background: {Palette.N300}; color: {Palette.DEEP}; }}
+.stButton button p {{ font-weight: 800; font-size: 14px; }}
+.stButton button[kind="secondary"] {{ background: {Palette.N200}; color: {Palette.DEEP}; }}
+.stButton button[kind="secondary"]:hover {{ background: {Palette.N300}; color: {Palette.DEEP}; }}
 
 /* metriche di st.metric: riquadri tenui */
 div[data-testid="stMetric"] {{ background: {Palette.N100}; border-radius: var(--radius-md); padding: 16px 20px; }}
 [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {{ text-transform: uppercase !important; letter-spacing: .08em; font-size: 11px; color: {Palette.N700}; }}
 div[data-testid="stMetricValue"], div[data-testid="stMetricValue"] * {{ font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; }}
 [data-testid="stAlert"] {{ border-radius: var(--radius-md); border: 0; }}
-[data-testid="stExpander"] details {{ border: 0; background: {Palette.N100}; border-radius: var(--radius-md); }}
 
 </style>
 """

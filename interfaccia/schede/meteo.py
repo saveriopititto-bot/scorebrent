@@ -15,11 +15,7 @@ class SchedaMeteo(Scheda):
     def mostra(self) -> None:
         st.subheader("Fa più caldo o più freddo del normale in Europa?")
         meteo = self.ctx.meteo
-        if not meteo.attivo:
-            st.info("La temperatura è disattivata: attiva «Usa la temperatura in Europa» nella barra laterale.")
-            return
-        if not meteo.disponibile:
-            st.warning(f"Non sono riuscito a scaricare le temperature da Open-Meteo: {meteo.errore}")
+        if self.manca(meteo, "Temperatura in Europa", "le temperature da Open-Meteo"):
             return
         anomalia = meteo.valore
         c1, c2 = st.columns(2)
@@ -31,9 +27,7 @@ class SchedaMeteo(Scheda):
         Grafici.nel_tempo(self.ctx.base.loc[inizio_g:, ["eur"]].rename(columns={"eur": "Euro al barile"}),
                           "Prezzo al barile")
         st.caption(
-            f"Temperatura media di {', '.join(FonteMeteo.CITTA)}. Il «normale» è la media dello stesso periodo dell'anno "
-            f"dal {anomalia.index[0].year} a oggi: sopra zero fa più caldo del solito, sotto zero più freddo. In teoria "
-            "un inverno più freddo fa consumare più gasolio da riscaldamento e può spingere il prezzo; la scheda «Prova "
-            "di previsione» verifica se succede davvero. Dati meteo: [Open-Meteo.com](https://open-meteo.com) (licenza "
-            "CC BY 4.0)."
+            f"Media di {', '.join(FonteMeteo.CITTA)}. Il «normale» è la media dello stesso periodo dell'anno dal "
+            f"{anomalia.index[0].year}. Un inverno freddo fa consumare più gasolio da riscaldamento: se questo muove "
+            "il prezzo lo verifica la «Prova di previsione». Dati: [Open-Meteo.com](https://open-meteo.com) (CC BY 4.0)."
         )
