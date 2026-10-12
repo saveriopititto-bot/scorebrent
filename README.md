@@ -237,6 +237,31 @@ SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... python esporta_score.py   # invia
 
 Opzioni: `--giorni N` (0 = tutto lo storico), `--alpha` e `--theta` (default 1). Gli α e θ scelti nella barra laterale dell'app non cambiano l'esportazione. Per usare valori diversi, cambiali nel workflow e rilancialo con «giorni» = `0` per riscrivere lo storico.
 
+## Test automatici
+
+I test sono nella cartella `tests/` e girano senza connessione: Yahoo Finance, Open-Meteo, GPR e prezzi alla pompa sono sostituiti da dati sintetici sempre uguali (`tests/conftest.py`).
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+Ci vuole circa un minuto. GitHub li esegue da solo (workflow «Test», `.github/workflows/test.yml`) a ogni pull request e a ogni aggiornamento di `main`, con Python 3.10 e 3.12.
+
+| File | Cosa controlla |
+|---|---|
+| `test_cammino.py` | Variazioni, riepiloghi e linearità; area di Lévy: quadrato di area 1, invarianza per traslazione, cambio di segno, zero se un canale dipende linearmente dall'altro, segno positivo quando il prezzo anticipa. |
+| `test_mercato_meteo.py` | Prezzo in euro e cambio, settimane che finiscono il venerdì, OVX diviso per √252, temperatura rispetto al normale (anche negli anni bisestili). |
+| `test_modelli.py` | Standardizzazione, regressione logistica e ridge, correzione lognormale, finestre scorrevoli che non usano il futuro, AUC, Brier e anni vinti. |
+| `test_previsioni.py` | Predittori e prove di rialzo e oscillazione. Su una passeggiata casuale la prova non deve trovare previsioni utili; su una serie con momentum sì. Cambiare i prezzi dopo un giorno non deve cambiare le previsioni fatte fino a quel giorno. |
+| `test_score_pompa.py` | Formula dello score, stabilità, soglie (±θ incluse), storico e verifica; ritardo della pompa e risparmio per pieno. |
+| `test_fonti.py` | Le fonti dati: righe impossibili scartate, almeno 3 città per la temperatura, solo prezzi italiani. |
+| `test_esporta.py` | Righe per Supabase, invio a blocchi da 500, errori dell'API, riga di comando, e che il modello si importi senza Streamlit. |
+| `test_app.py` | L'app intera con il simulatore di Streamlit: tutte le schede, settimana per settimana, la pagina per FuelMode, dati esterni spenti o irraggiungibili, Yahoo irraggiungibile, un errore che resta nella sua scheda. |
+| `test_regressione.py` | Lo score di ogni giorno (quello che va in Supabase) e le tabelle delle due prove devono restare uguali ai valori salvati in `tests/riferimenti/`. |
+
+Se una modifica al modello cambia i risultati di proposito, `test_regressione.py` fallisce: si controlla che la differenza sia quella voluta e si rigenerano i valori di riferimento con `python -m tests.riferimenti`.
+
 ## File
 
 | File | Contenuto |
@@ -265,6 +290,10 @@ Opzioni: `--giorni N` (0 = tutto lo storico), `--alpha` e `--theta` (default 1).
 | `.github/workflows/esporta-score.yml` | Esegue l'esportazione ogni giorno di borsa e su richiesta. |
 | `requirements.txt` | Le librerie Python dell'app. |
 | `requirements-export.txt` | Le librerie che servono solo allo script di esportazione (senza Streamlit). |
+| `requirements-dev.txt` | Le librerie per i test automatici (quelle dell'app più pytest). |
+| `tests/` | I test automatici (vedi «Test automatici»). |
+| `pytest.ini` | Configurazione di pytest. |
+| `.github/workflows/test.yml` | Esegue i test a ogni pull request e a ogni aggiornamento di `main`. |
 | `.streamlit/config.toml` | Configurazione di Streamlit: nasconde il pulsante «Deploy» e imposta il tema di FuelMode (colori, font e colori dei grafici). |
 
 ## Dati e avvertenze
