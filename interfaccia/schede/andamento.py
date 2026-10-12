@@ -21,8 +21,6 @@ class SchedaAndamento(Scheda):
         idx = serie.date[-len(h):]
 
         st.subheader("Di quanto è salito o sceso il prezzo in ogni periodo")
-        st.caption("Ogni barra è la variazione percentuale del prezzo in euro rispetto al periodo prima. "
-                   "Verde = salita, rosso = discesa.")
         Grafici.nel_tempo(pd.DataFrame({"Salita": np.clip(h, 0, None), "Discesa": np.clip(h, None, 0)}, index=idx),
                           "Variazione (%)", barre=True, colori=[Palette.VERDE, Palette.ROSSO])
 
@@ -56,11 +54,6 @@ class SchedaAndamento(Scheda):
                   help="La variazione di questi giorni confrontata con l'oscillazione abituale del prezzo "
                        "(calcolata sugli ultimi 60 giorni di borsa). Fra −1 e +1 è normale amministrazione; "
                        "oltre ±2 è un movimento forte.")
-        st.caption(
-            "La sola differenza fra inizio e fine non dice come ci si è arrivati: un periodo calmo e uno molto "
-            "agitato possono finire allo stesso prezzo. Il movimento complessivo, la variazione tipica e la "
-            "linearità descrivono proprio il percorso."
-        )
 
     def _anticipo(self) -> None:
         serie, w, N, unita = self.ctx.serie, self.imp.w, self.imp.N, self.imp.unita
@@ -71,8 +64,7 @@ class SchedaAndamento(Scheda):
         ultimo = serie_A.dropna()
         st.metric("Valore più recente", f"{ultimo.iloc[-1]:+.2f}" if len(ultimo) else "non disponibile")
         st.caption(
-            "L'«agitazione» è quanto il prezzo oscilla dentro lo stesso periodo (distanza fra massimo e minimo). "
-            f"L'indice confronta, sugli ultimi {w} {unita} di volta in volta, l'ordine in cui si muovono prezzo e "
-            "agitazione. **Sopra zero: si muove prima il prezzo e poi l'agitazione. Sotto zero: prima l'agitazione e "
-            "poi il prezzo.** Vicino a zero: nessuno dei due anticipa l'altro. (Tecnicamente è l'«area di Lévy».)"
+            f"Calcolato sugli ultimi {w} {unita} di volta in volta; l'agitazione è la distanza fra massimo e minimo "
+            "dentro il periodo. **Sopra zero si muove prima il prezzo, sotto zero prima l'agitazione**; vicino a zero "
+            "nessuno dei due anticipa l'altro. È l'«area di Lévy» della scheda «Formule»."
         )

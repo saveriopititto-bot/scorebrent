@@ -51,18 +51,14 @@ class SchedaProssimi(Scheda):
                        f"della scheda «Oscillazione attesa», calcolato giorno per giorno sugli ultimi "
                        f"{self.ctx.parametri_score.finestra} giorni.")
         ultimo = fut.iloc[-1]
-        c3.metric(f"Il {ultimo['Data']:%d/%m}, in 2 casi su 3", f"{ultimo['min68']:.2f} – {ultimo['max68']:.2f} {simbolo}",
-                  help="Intervallo in cui il prezzo dovrebbe trovarsi in circa 2 casi su 3 alla fine dei 5 giorni.")
+        c3.metric(f"Il {ultimo['Data']:%d/%m}, in 2 casi su 3", f"{ultimo['min68']:.2f} – {ultimo['max68']:.2f} {simbolo}")
 
         self._grafico(fut, col_p, simbolo)
         self._tabella(fut, simbolo)
         st.caption(
-            "**Come leggerla.** La linea tratteggiata è la previsione centrale: resta al prezzo di oggi perché la "
-            "direzione del Brent non si può prevedere dal passato (lo mostra la scheda «Prova di previsione»). Quello "
-            "che si può prevedere è quanto il prezzo si muoverà: la fascia più scura è dove dovrebbe trovarsi in circa "
-            "2 casi su 3, quella più chiara in circa 19 casi su 20. La fascia si allarga perché più si guarda avanti, "
-            "più il prezzo ha tempo per allontanarsi. Non tiene conto delle festività di borsa e non è un consiglio "
-            "di investimento."
+            "La linea tratteggiata resta al prezzo di oggi: la direzione del Brent non si prevede dal passato, quanto "
+            "si muoverà sì. Il prezzo dovrebbe restare nella fascia scura in 2 casi su 3 e in quella chiara in 19 su 20. "
+            "Le date non tengono conto delle festività di borsa."
         )
 
     def _grafico(self, fut: pd.DataFrame, col_p: str, simbolo: str) -> None:

@@ -5,7 +5,8 @@ import streamlit as st
 
 from .contesto import Contesto
 from .impostazioni import Impostazioni
-from .schede import SCHEDE, SchedaScore
+from .menu import Menu
+from .schede import SchedaScore
 from .stile import Stile
 
 
@@ -32,6 +33,7 @@ class App:
             with st.container(key="card-score"):  # scheda bianca, come nella versione con le schede
                 SchedaScore(ctx).mostra_protetta()
             return
-        for scheda, tab in zip(SCHEDE, st.tabs([s.titolo for s in SCHEDE])):
+        sezione = Menu.scegli()  # si calcolano solo le schede della sezione scelta
+        for scheda, tab in zip(sezione.schede, st.tabs([s.titolo for s in sezione.schede])):
             with tab:
                 scheda(ctx).mostra_protetta()

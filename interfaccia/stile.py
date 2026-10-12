@@ -100,18 +100,28 @@ section[data-testid="stSidebar"] > [data-testid="stSidebarContent"] {{ backgroun
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div:first-child {{ border-radius: 999px; }}
 [data-testid="stTooltipIcon"] svg {{ stroke: {Palette.N500}; }}
 
-/* tab come barra di navigazione (selettori per Streamlit < 1.6x e >= 1.6x) */
+/* menù: nome dell'app e un bottone per sezione, in una scheda bianca */
+.st-key-card-menu {{ padding: 12px 12px 12px 24px !important; row-gap: 8px !important; }}
+.x-brand {{ margin: 0; font-size: 18px !important; font-weight: 800; letter-spacing: -0.015em; color: {Palette.DEEP};
+  white-space: nowrap; }}
+.st-key-card-menu [data-testid="stButtonGroup"] button {{ border: 0; border-radius: 999px !important; margin: 0 2px;
+  padding: 8px 16px; min-height: 40px; background: {Palette.N100}; color: {Palette.DEEP}; box-shadow: none; }}
+.st-key-card-menu [data-testid="stButtonGroup"] button:hover,
+.st-key-card-menu [data-testid="stButtonGroup"] button:focus-visible {{ background: {Palette.N200}; color: {Palette.ORANGE}; }}
+.st-key-card-menu [data-testid="stButtonGroup"] button p {{ font-size: 14px; font-weight: 800; color: inherit; }}
+.st-key-card-menu [data-testid="stButtonGroup"] button[aria-checked="true"],
+.st-key-card-menu [data-testid="stButtonGroup"] button[aria-checked="true"]:hover {{ background: {Palette.DEEP} !important;
+  color: #fff !important; }}
+
+/* schede della sezione: una riga di pillole sotto il menù (selettori per Streamlit < 1.6x e >= 1.6x) */
 .stTabs [data-baseweb="tab-list"], .stTabs [role="tablist"] {{ gap: 4px; align-items: center; flex-wrap: wrap;
-  row-gap: 10px; background: #fff; border: 0; box-shadow: var(--shadow-soft); padding: 12px 12px 12px 24px;
-  border-radius: var(--radius-lg); overflow: visible; }}
-.stTabs [data-baseweb="tab-list"]::before, .stTabs [role="tablist"]::before {{ content: "{Palette.BRAND}";
-  margin-right: auto; padding-right: 16px; font-size: 18px; font-weight: 800; letter-spacing: -0.015em; color: {Palette.DEEP}; }}
-.stTabs [data-baseweb="tab"], .stTabs [role="tab"] {{ height: auto; padding: 8px 10px; margin: 0; border: 0;
-  border-radius: 999px; background: transparent; cursor: pointer; }}
+  row-gap: 6px; background: transparent; border: 0; padding: 0 4px; overflow: visible; }}
+.stTabs [data-baseweb="tab"], .stTabs [role="tab"] {{ height: auto; padding: 6px 14px; margin: 0;
+  border: 1px solid {Palette.N300}; border-radius: 999px; background: #fff; cursor: pointer; }}
 .stTabs [role="tab"] p {{ font-size: 14px; font-weight: 600; color: {Palette.DEEP}; }}
 .stTabs [role="tab"]:hover p {{ color: {Palette.ORANGE}; }}
-.stTabs [role="tab"][aria-selected="true"] {{ background: {Palette.DEEP}; }}
-.stTabs [role="tab"][aria-selected="true"] p {{ color: #fff; }}
+.stTabs [role="tab"][aria-selected="true"] {{ background: {Palette.SKY}; border-color: {Palette.SKY}; }}
+.stTabs [role="tab"][aria-selected="true"] p {{ color: {Palette.DEEP}; font-weight: 800; }}
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"],
 .stTabs .react-aria-SelectionIndicator, .stTabs [role="tablist"]::after {{ display: none; }}
 /* il contenuto di ogni scheda è una scheda bianca */

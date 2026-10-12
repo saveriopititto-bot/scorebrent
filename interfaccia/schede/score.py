@@ -38,6 +38,7 @@ class SchedaScore(Scheda):
         self._grafico()
         self._verifica_brent()
         self._verifica_pompa()
+        st.caption("Analisi sui dati di mercato, non è un consiglio di investimento.")
 
     def _oggi(self) -> None:
         oggi = self.ctx.score.oggi
@@ -58,12 +59,8 @@ class SchedaScore(Scheda):
 
         st.latex(r"S=\frac{\ln\left(P_t/\bar P_{30}\right)}{\sigma\sqrt{5}}\cdot e^{-\alpha\,\max\left(0,\;"
                  r"\sigma/\sigma_{norm}-1\right)}")
-        st.caption(
-            "Adattamento dello SCORE 4.0: il rapporto fra prezzo di oggi e media dei 30 giorni prende il posto del "
-            "rapporto fra tempo di riferimento e tempo effettivo; la divisione per l'oscillazione attesa in 5 giorni "
-            "(σ√5) fa da normalizzazione; il fattore esponenziale è la stabilità, fra 0 e 1. "
-            f"Con α = {p.alpha:.1f} e θ = {p.soglia:.2f}."
-        )
+        st.caption(f"Adattamento dello SCORE 4.0, con α = {p.alpha:.1f} e θ = {p.soglia:.2f}. I passaggi sono nella "
+                   "scheda «Formule».")
 
     def _grafico(self) -> None:
         theta = self.ctx.parametri_score.soglia
@@ -107,18 +104,14 @@ class SchedaScore(Scheda):
         )
         periodo = sc["S"].dropna()
         st.caption(
-            f"Dal {periodo.index[0]:%d/%m/%Y} al {periodo.index[-1]:%d/%m/%Y}. Con la logica dello score ci si aspetta "
-            "che dopo un +1 il Brent salga più spesso della media di tutti i giorni, e dopo un −1 meno spesso: "
-            "così il segnale anticipa la pompa ancora di più. Questa prova guarda solo il Brent: quanto si risparmia "
-            "davvero lo dice la verifica con i prezzi alla pompa qui sotto. Non è un consiglio di investimento."
+            f"Dal {periodo.index[0]:%d/%m/%Y} al {periodo.index[-1]:%d/%m/%Y}. Il segnale è coerente se dopo un +1 il "
+            "Brent sale più spesso che in «Tutti i giorni» e dopo un −1 meno spesso."
         )
 
     def _verifica_pompa(self) -> None:
         st.markdown("**Verifica con i prezzi alla pompa in Italia**")
         pompa = self.ctx.pompa
-        if not pompa.disponibile:
-            st.info("Attiva «Usa i prezzi alla pompa in Italia» nella barra laterale per questa verifica."
-                    if not pompa.attivo else f"Prezzi alla pompa non disponibili: {pompa.errore}")
+        if self.manca(pompa, "Prezzi alla pompa in Italia", "i prezzi alla pompa"):
             return
         ver = AnalisiPompa(pompa.valore).verifica_score(self.ctx.score.tabella["classe"])
         colonne = {f"{c} dopo {h}": f"{c} dopo {h} settiman{'a' if h == 1 else 'e'}"
@@ -142,9 +135,7 @@ class SchedaScore(Scheda):
                            "Volte in cui ha fatto risparmiare (%)": st.column_config.NumberColumn(format="%.0f")},
         )
         st.caption(
-            "La prima tabella dice come è cambiato il prezzo medio italiano alla pompa nelle settimane dopo ogni "
-            "esito (lo score è quello del lunedì del listino). Lo score funziona se dopo un +1 la pompa sale e "
-            "dopo un −1 scende. La seconda tabella traduce tutto in euro per un pieno da 50 litri: seguendo lo "
-            "score (+1 = fare il pieno subito invece che dopo 1 o 2 settimane, −1 = aspettare) quanto si è "
-            "risparmiato in media, e quante volte. Un valore positivo vuol dire che lo score ha fatto risparmiare."
+            "Sopra: come è cambiata la pompa dopo ogni esito (score del lunedì del listino); funziona se dopo un +1 "
+            "sale e dopo un −1 scende. Sotto: quanto si è risparmiato in media su un pieno da 50 litri seguendo lo "
+            "score (+1 = pieno subito, −1 = aspettare 1 o 2 settimane)."
         )

@@ -13,12 +13,7 @@ class SchedaGeopolitica(Scheda):
     def mostra(self) -> None:
         st.subheader("Quanto è alto il rischio geopolitico?")
         gpr = self.ctx.gpr
-        if not gpr.attivo:
-            st.info("Il rischio geopolitico è disattivato: attiva «Usa il rischio geopolitico (GPR)» nella barra "
-                    "laterale.")
-            return
-        if not gpr.disponibile:
-            st.warning(f"Non sono riuscito a scaricare il rischio geopolitico (GPR): {gpr.errore}")
+        if self.manca(gpr, "Rischio geopolitico (GPR)", "il rischio geopolitico (GPR)"):
             return
         gpr_df = gpr.valore
         gd = gpr_df["GPRD"]
@@ -39,12 +34,10 @@ class SchedaGeopolitica(Scheda):
                           "Prezzo al barile")
         self._eventi(gpr_df)
         st.caption(
-            "Il Geopolitical Risk Index conta, ogni giorno, la quota di articoli di 10 grandi giornali che parlano di "
-            "guerre, terrorismo e tensioni fra Paesi. Le crisi in Medio Oriente o fra produttori di petrolio possono "
-            "far salire il prezzo o renderlo più agitato; le schede «Prova di previsione» e «Oscillazione attesa» "
-            "verificano se succede davvero. Il file è aggiornato dagli autori con qualche giorno di ritardo. Fonte: "
-            "D. Caldara e M. Iacoviello, «Measuring Geopolitical Risk», American Economic Review, 2022, dati da "
-            "[matteoiacoviello.com](https://www.matteoiacoviello.com/gpr.htm)."
+            "Quota di articoli di 10 grandi giornali su guerre, terrorismo e tensioni fra Paesi. Se le crisi muovono il "
+            "Brent lo verificano «Prova di previsione» e «Oscillazione attesa». Aggiornato dagli autori con qualche "
+            "giorno di ritardo. Fonte: D. Caldara e M. Iacoviello, «Measuring Geopolitical Risk», American Economic "
+            "Review, 2022, [matteoiacoviello.com](https://www.matteoiacoviello.com/gpr.htm)."
         )
 
     @staticmethod

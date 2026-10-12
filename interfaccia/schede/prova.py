@@ -27,23 +27,10 @@ class SchedaProva(Scheda):
         passo = imp.freq.passo
         st.subheader("L'andamento passato aiuta a prevedere il prezzo?")
         st.markdown(
-            f"Domanda: il prezzo in euro salirà di oltre **{soglia:.1f}%** nei prossimi **{orizzonte} {unita}**? "
-            "La prova procede **a finestre scorrevoli**, come se il modello fosse usato davvero nel tempo: il primo 40% "
-            f"dello storico serve solo per imparare; poi, ogni {passo} {unita} (circa un mese), il modello si riaddestra "
-            "su tutto il passato disponibile e prevede il mese successivo, che non ha mai visto. Il confronto è con una "
-            "**stima di riferimento** che non guarda il passato recente e dà sempre la stessa probabilità: quanto spesso "
-            "il prezzo è salito fino a quel momento."
-        )
-        st.markdown(
-            f"**Oscillazione (sigma e MAD)**: quanto il prezzo si è mosso negli ultimi {w} {unita}. *Sigma* è "
-            "l'oscillazione tipica; *MAD* è la stessa idea ma non si lascia influenzare da un singolo salto. Non dicono se "
-            "il prezzo salirà o scenderà, ma quanto è probabile un movimento grande: contano soprattutto quando il "
-            "«rialzo minimo da prevedere» è sopra lo 0%."
-            + (f" **Temperatura**: media della temperatura rispetto al normale sugli ultimi {w} {unita}."
-               if serie.m is not None else "")
-            + (" **OVX**: quanto il mercato si aspetta che il petrolio oscilli nei prossimi 30 giorni."
-               if serie.o is not None else "")
-            + (" **GPR**: rischio geopolitico, media degli ultimi 7 giorni." if serie.g is not None else "")
+            f"Il prezzo in euro salirà di oltre **{soglia:.1f}%** nei prossimi **{orizzonte} {unita}**? La prova va "
+            f"**a finestre scorrevoli**: il modello impara dal primo 40% dello storico, poi ogni {passo} {unita} si "
+            "riaddestra sul passato e prevede il periodo dopo, che non ha mai visto. Il confronto è con la **stima di "
+            "riferimento**, cioè quanto spesso il prezzo è salito fino a quel momento."
         )
         if st.button("Esegui la prova"):
             try:
@@ -56,10 +43,8 @@ class SchedaProva(Scheda):
             else:
                 self._risultati(prova)
         st.caption(
-            "Attenzione: i periodi vicini si sovrappongono (il rialzo dei prossimi giorni è in gran parte lo stesso per "
-            f"oggi e per domani), quindi i casi davvero indipendenti sono circa uno ogni {orizzonte} {unita}. "
-            "Inoltre il Brent quotato è un contratto con scadenza mensile: quando si passa da un contratto al "
-            "successivo il prezzo fa piccoli salti che non sono veri movimenti del mercato."
+            f"I casi vicini si sovrappongono: quelli davvero indipendenti sono circa uno ogni {orizzonte} {unita}. Il "
+            "Brent quotato cambia contratto ogni mese, con piccoli salti che non sono veri movimenti del mercato."
         )
 
     def _risultati(self, prova: ProvaRialzo) -> None:

@@ -16,12 +16,7 @@ class SchedaPompa(Scheda):
     def mostra(self) -> None:
         st.subheader("Prezzi medi alla pompa in Italia")
         pompa = self.ctx.pompa
-        if not pompa.attivo:
-            st.info("I prezzi alla pompa sono disattivati: attiva «Usa i prezzi alla pompa in Italia» nella barra "
-                    "laterale.")
-            return
-        if not pompa.disponibile:
-            st.warning(f"Non sono riuscito a scaricare i prezzi alla pompa: {pompa.errore}")
+        if self.manca(pompa, "Prezzi alla pompa in Italia", "i prezzi alla pompa"):
             return
         analisi = AnalisiPompa(pompa.valore)
         pompa_df = analisi.prezzi
@@ -58,8 +53,7 @@ class SchedaPompa(Scheda):
                          "per ogni centesimo di Brent")
         st.markdown("In questi dati " + "; ".join(frasi) + ".")
         st.caption(
-            "Per ogni ritardo, la tabella confronta la variazione del Brent in una settimana con quella della pompa "
-            "dopo 0, 1, 2… settimane. La correlazione dice quanto i due movimenti vanno insieme; la quota trasferita "
-            "dice quanti centesimi alla pompa segue ogni centesimo di Brent al litro. Fonte: EU Weekly Oil Bulletin, "
+            "Per ogni ritardo in settimane: la correlazione dice quanto la pompa segue il Brent, la quota trasferita "
+            "quanti centesimi alla pompa per ogni centesimo di Brent al litro. Fonte: EU Weekly Oil Bulletin, "
             "Commissione Europea, raccolto da [fuel-prices.eu](https://www.fuel-prices.eu/research/) (CC BY 4.0)."
         )
