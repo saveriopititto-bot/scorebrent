@@ -52,7 +52,7 @@ L'app ha dieci schede.
   - Nella prova c'è anche un modello con il rischio geopolitico (GPR).
   - La prova a finestre scorrevoli confronta i modelli con tre riferimenti: «come nel periodo appena passato», «OVX così com'è» e «media storica».
   - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
-- **Formule**: tutte le formule del modello matematico, con spiegazioni e passaggi, nell'ordine in cui vengono applicate: dati e notazione, variazioni e riepiloghi, area di Lévy, temperatura rispetto al normale, prova di previsione del rialzo (regressione logistica, Brier, AUC), oscillazione attesa (regressione ridge e correzione lognormale), fasce dei prossimi 5 giorni, score di rifornimento e prezzi alla pompa. Accanto a ogni formula c'è il nome della funzione di `brent_math.py` che la calcola.
+- **Formule**: tutte le formule del modello matematico, con spiegazioni e passaggi, nell'ordine in cui vengono applicate: dati e notazione, variazioni e riepiloghi, area di Lévy, temperatura rispetto al normale, prova di previsione del rialzo (regressione logistica, Brier, AUC), oscillazione attesa (regressione ridge e correzione lognormale), fasce dei prossimi 5 giorni, score di rifornimento e prezzi alla pompa. Accanto a ogni formula c'è il nome della classe o del metodo del pacchetto `brent` che la calcola.
 
 ## Impostazioni
 
@@ -151,11 +151,11 @@ L'app si apre nel browser all'indirizzo http://localhost:8501. Deve poter raggiu
 
 L'app si pubblica scegliendo questo repository, il branch `main` e il file `app.py`; le librerie vengono installate da `requirements.txt`.
 
-Dopo un aggiornamento che cambia sia `app.py` sia `brent_math.py`, Streamlit può ricaricare solo `app.py` e tenere in memoria la versione vecchia di `brent_math.py`. Ne nasce un errore come `got an unexpected keyword argument`. In quel caso basta riavviare l'app: **Manage app → ⋮ → Reboot app**.
+Dopo un aggiornamento che cambia più file, Streamlit può ricaricare solo `app.py` e tenere in memoria la versione vecchia dei pacchetti `brent` e `interfaccia`. Ne nasce un errore come `got an unexpected keyword argument`. In quel caso basta riavviare l'app: **Manage app → ⋮ → Reboot app**.
 
 ## Esportazione in Supabase (per FuelMode)
 
-Ogni giorno lo score di rifornimento viene scritto nella tabella `brent_score` di Supabase, una riga per giorno di borsa, così FuelMode può leggerlo. Lo fa lo script `esporta_score.py`, che usa gli stessi dati e lo stesso calcolo dell'app (`dati.py` e `brent_math.score_storico`). Con α = 1 e θ = 1 il valore in Supabase è identico a quello della scheda «Score rifornimento».
+Ogni giorno lo score di rifornimento viene scritto nella tabella `brent_score` di Supabase, una riga per giorno di borsa, così FuelMode può leggerlo. Lo fa lo script `esporta_score.py`, che usa gli stessi dati e lo stesso calcolo dell'app (`brent.fonti` e `brent.score.ScoreRifornimento`). Con α = 1 e θ = 1 il valore in Supabase è identico a quello della scheda «Score rifornimento».
 
 ### Da fare una volta
 
@@ -241,12 +241,26 @@ Opzioni: `--giorni N` (0 = tutto lo storico), `--alpha` e `--theta` (default 1).
 
 | File | Contenuto |
 |---|---|
-| `app.py` | L'interfaccia: download di prezzi, OVX, GPR, temperature e prezzi alla pompa, schede, grafici e testi. |
-| `formule.py` | La scheda «Formule»: tutte le formule del modello in LaTeX, con spiegazioni e passaggi. Solo testo, non usa i dati scaricati. |
-| `style.py` | Lo stile di FuelMode: CSS globale e colori della palette, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
-| `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione, score di rifornimento (`score_storico`), ritardo della pompa e prova a finestre scorrevoli. Non dipende da Streamlit. |
-| `dati.py` | Download da Yahoo Finance (Brent, cambio, OVX) e preparazione dei prezzi, senza Streamlit: lo usano sia l'app sia lo script di esportazione. |
-| `esporta_score.py` | Calcola lo score e lo scrive nella tabella `brent_score` di Supabase. |
+| `app.py` | Punto di avvio dell'app: crea `interfaccia.app.App` e la esegue. |
+| `brent/` | Il modello matematico, a classi e senza Streamlit: lo usano sia l'app sia lo script di esportazione. |
+| `brent/fonti.py` | Download dei dati: `FonteYahoo` (Brent, cambio, OVX), `FonteMeteo` (Open-Meteo), `FonteGpr` (rischio geopolitico), `FontePompa` (prezzi alla pompa). |
+| `brent/mercato.py` | `PrezziBrent` (prezzi in euro, raggruppati per giorno o settimana), `Frequenza`, `Ovx` (volatilità per periodo) e `SerieAnalisi` (le serie x, y, m, o, g allineate). |
+| `brent/cammino.py` | `Percorso` e `Riepilogo` (variazioni fra periodi, riepiloghi e linearità), `CamminoPiano` (area di Lévy, anche su finestra mobile). |
+| `brent/meteo.py` | `AnomaliaStagionale`: temperatura rispetto al normale. |
+| `brent/modelli.py` | I mattoni dei modelli: `InsiemiPredittori`, `Standardizzatore`, `RegressioneLogistica`, `RegressioneRidge`, `FinestreScorrevoli` (prova senza usare il futuro) e `Punteggi` (Brier, AUC, anni vinti). |
+| `brent/rialzo.py` | `PrevisioneRialzo`: predittori della finestra mobile e prova della previsione del rialzo. |
+| `brent/oscillazione.py` | `PrevisioneOscillazione`: predittori, previsione, previsione scorrevole e prova dell'oscillazione. |
+| `brent/score.py` | `ScoreRifornimento` (score, storico e verifica sul Brent), `Esito` (+1, 0, −1) e `StoricoScore`. |
+| `brent/pompa.py` | `AnalisiPompa`: ritardo della pompa rispetto al Brent e verifica dello score sui prezzi alla pompa. |
+| `interfaccia/` | L'interfaccia Streamlit. |
+| `interfaccia/app.py` | `App`: configura la pagina, legge le impostazioni, carica i dati e mostra le schede (o la sola scheda dello score con `?pagina=score`). |
+| `interfaccia/impostazioni.py` | `Impostazioni`: la barra laterale. |
+| `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py` con la cache di Streamlit. |
+| `interfaccia/contesto.py` | `Contesto`: impostazioni, dati scaricati (`DatoFacoltativo` per quelli che possono mancare) e calcoli condivisi dalle schede, come lo score. |
+| `interfaccia/grafici.py` | `Grafici`: i grafici nel tempo con le date in formato italiano. |
+| `interfaccia/stile.py` | `Palette` e `Stile`: lo stile di FuelMode, CSS globale e colori, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
+| `interfaccia/schede/` | Una classe per scheda, tutte figlie di `Scheda` (`base.py`): `SchedaPrezzo`, `SchedaScore`, `SchedaProssimi`, `SchedaPompa`, `SchedaAndamento`, `SchedaMeteo`, `SchedaGeopolitica`, `SchedaProva`, `SchedaOscillazione`, `SchedaFormule`. L'ordine è in `schede/__init__.py`. Se una scheda va in errore, l'errore resta dentro la scheda e le altre si vedono lo stesso. |
+| `esporta_score.py` | `EsportazioneScore` calcola lo score e prepara le righe, `ClienteSupabase` le scrive nella tabella `brent_score` di Supabase. |
 | `supabase/brent_score.sql` | Crea la tabella `brent_score` e la regola di lettura pubblica. |
 | `.github/workflows/esporta-score.yml` | Esegue l'esportazione ogni giorno di borsa e su richiesta. |
 | `requirements.txt` | Le librerie Python dell'app. |
