@@ -1,6 +1,6 @@
 """Calcola lo score di rifornimento e lo scrive nella tabella `brent_score` di Supabase, per FuelMode.
 
-Usa gli stessi dati e la stessa funzione dell'app (dati.py e brent_math.score_storico), quindi il valore
+Usa gli stessi dati e lo stesso calcolo dell'app (brent.fonti e brent.score.ScoreRifornimento), quindi il valore
 in Supabase coincide con quello della scheda «Score rifornimento» con gli stessi α e θ.
 
 Variabili d'ambiente (non servono con --prova):
@@ -20,65 +20,77 @@ import os
 import sys
 from datetime import datetime, timezone
 
-import pandas as pd
 import requests
 
-import brent_math as bm
-import dati
-
-TABELLA = "brent_score"
-FINESTRA, ORIZZONTE = 20, 5   # come la scheda «Score rifornimento»
+from brent.fonti import FonteYahoo
+from brent.mercato import Ovx, PrezziBrent
+from brent.score import Esito, ScoreRifornimento, StoricoScore
 
 
-def calcola(alpha: float, theta: float) -> tuple[pd.DataFrame, str]:
-    """Scarica i dati e calcola lo score di ogni giorno. Senza OVX usa il modello «+ agitazione»."""
-    base = dati.costruisci_base(dati.scarica_yahoo(dati.BRENT), dati.scarica_yahoo(dati.EURUSD))
-    try:
-        ovx = dati.ovx_giornaliero(dati.scarica_yahoo(dati.OVX)["Close"], base.index)
-    except Exception as e:  # l'OVX è facoltativo, come nell'app
-        print(f"OVX non disponibile, continuo senza: {e}", file=sys.stderr)
-        ovx = None
-    return bm.score_storico(base, ovx, alpha, theta, FINESTRA, ORIZZONTE)
+class EsportazioneScore:
+    """Score di ogni giorno di borsa, con finestra di 20 giorni e orizzonte di 5 come la scheda «Score
+    rifornimento», trasformato nelle righe della tabella."""
+
+    def __init__(self, alpha: float = 1.0, theta: float = 1.0, fonte: FonteYahoo | None = None):
+        self.score = ScoreRifornimento(alpha, theta)
+        self.fonte = FonteYahoo() if fonte is None else fonte
+
+    def calcola(self) -> StoricoScore:
+        """Scarica i dati e calcola lo score di ogni giorno. Senza OVX usa il modello «+ agitazione»."""
+        prezzi = PrezziBrent.scarica(self.fonte)
+        try:
+            ovx = Ovx.giornaliero(self.fonte.scarica(FonteYahoo.OVX)["Close"], prezzi.date)
+        except Exception as e:  # l'OVX è facoltativo, come nell'app
+            print(f"OVX non disponibile, continuo senza: {e}", file=sys.stderr)
+            ovx = None
+        return self.score.storico(prezzi, ovx)
+
+    def righe(self, storico: StoricoScore, giorni: int) -> list[dict]:
+        """Righe da scrivere: gli ultimi `giorni` giorni di borsa con uno score (0 = tutti)."""
+        d = storico.tabella.dropna(subset=["S", "classe"])
+        if giorni > 0:
+            d = d.iloc[-giorni:]
+        adesso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        return [
+            {
+                "data": f"{giorno:%Y-%m-%d}",
+                "esito": int(r.classe),
+                "score": round(float(r.S), 6),
+                "brent_eur": round(float(r.prezzo), 4),
+                "media_30_eur": round(float(r.media), 4),
+                "scarto": round(float(r.scarto), 6),
+                "oscillazione_5g": round(float(r.sigma) * self.score.orizzonte ** 0.5, 6),
+                "stabilita": round(float(r.stabilita), 6),
+                "alpha": self.score.alpha,
+                "theta": self.score.soglia,
+                "modello": storico.modello,
+                "aggiornato_il": adesso,
+            }
+            for giorno, r in d.iterrows()
+        ]
 
 
-def righe(sc: pd.DataFrame, modello: str, alpha: float, theta: float, giorni: int) -> list[dict]:
-    """Righe da scrivere: gli ultimi `giorni` giorni di borsa con uno score (0 = tutti)."""
-    d = sc.dropna(subset=["S", "classe"])
-    if giorni > 0:
-        d = d.iloc[-giorni:]
-    adesso = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    return [
-        {
-            "data": f"{giorno:%Y-%m-%d}",
-            "esito": int(r.classe),
-            "score": round(float(r.S), 6),
-            "brent_eur": round(float(r.prezzo), 4),
-            "media_30_eur": round(float(r.media), 4),
-            "scarto": round(float(r.scarto), 6),
-            "oscillazione_5g": round(float(r.sigma) * ORIZZONTE ** 0.5, 6),
-            "stabilita": round(float(r.stabilita), 6),
-            "alpha": alpha,
-            "theta": theta,
-            "modello": modello,
-            "aggiornato_il": adesso,
+class ClienteSupabase:
+    """Scrittura nella tabella dello score con l'API REST di Supabase."""
+
+    TABELLA = "brent_score"
+
+    def __init__(self, url: str, chiave: str):
+        self.url, self.chiave = url, chiave
+
+    def invia(self, righe: list[dict], blocco: int = 500) -> None:
+        """Inserisce o aggiorna le righe (chiave: data)."""
+        indirizzo = f"{self.url.rstrip('/')}/rest/v1/{self.TABELLA}?on_conflict=data"
+        intestazioni = {
+            "apikey": self.chiave,
+            "Authorization": f"Bearer {self.chiave}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
         }
-        for giorno, r in d.iterrows()
-    ]
-
-
-def invia(dati_righe: list[dict], url: str, chiave: str, blocco: int = 500) -> None:
-    """Inserisce o aggiorna le righe (chiave: data) con l'API REST di Supabase."""
-    indirizzo = f"{url.rstrip('/')}/rest/v1/{TABELLA}?on_conflict=data"
-    intestazioni = {
-        "apikey": chiave,
-        "Authorization": f"Bearer {chiave}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=minimal",
-    }
-    for i in range(0, len(dati_righe), blocco):
-        r = requests.post(indirizzo, headers=intestazioni, json=dati_righe[i : i + blocco], timeout=60)
-        if r.status_code >= 300:
-            raise RuntimeError(f"Supabase ha risposto {r.status_code}: {r.text[:500]}")
+        for i in range(0, len(righe), blocco):
+            r = requests.post(indirizzo, headers=intestazioni, json=righe[i : i + blocco], timeout=60)
+            if r.status_code >= 300:
+                raise RuntimeError(f"Supabase ha risposto {r.status_code}: {r.text[:500]}")
 
 
 def main() -> int:
@@ -94,20 +106,21 @@ def main() -> int:
         print("Mancano SUPABASE_URL e/o SUPABASE_SERVICE_ROLE_KEY (oppure usa --prova).", file=sys.stderr)
         return 2
 
-    sc, modello = calcola(a.alpha, a.theta)
-    da_inviare = righe(sc, modello, a.alpha, a.theta, a.giorni)
+    esportazione = EsportazioneScore(a.alpha, a.theta)
+    storico = esportazione.calcola()
+    da_inviare = esportazione.righe(storico, a.giorni)
     if not da_inviare:
         print("Nessuno score da inviare.", file=sys.stderr)
         return 1
     ultima = da_inviare[-1]
-    esito = {1: "+1 rifornisci", 0: "0 neutro", -1: "-1 aspetta"}[ultima["esito"]]
-    print(f"Score del {ultima['data']}: {esito}, S = {ultima['score']:+.3f} ({modello}); "
+    esito = Esito(ultima["esito"]).etichetta.replace("−", "-")
+    print(f"Score del {ultima['data']}: {esito}, S = {ultima['score']:+.3f} ({storico.modello}); "
           f"{len(da_inviare)} righe.")
     if a.prova:
         print(json.dumps(da_inviare[-3:], indent=2, ensure_ascii=False))
         return 0
-    invia(da_inviare, url, chiave)
-    print(f"Scritte in Supabase, tabella {TABELLA}.")
+    ClienteSupabase(url, chiave).invia(da_inviare)
+    print(f"Scritte in Supabase, tabella {ClienteSupabase.TABELLA}.")
     return 0
 
 
