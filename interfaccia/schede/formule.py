@@ -103,8 +103,7 @@ class SchedaFormule(Scheda):
             "standard «normali» si è mosso il prezzo. Fra −1 e +1 è normale, oltre ±2 è un movimento forte."
         )
         st.markdown(
-            "Nella scheda «Prezzo», la variazione semplice è $d = P_t/P_{t-n} - 1$, mostrata anche tagliata a "
-            "$\\max(-10\\%, \\min(10\\%, d))$."
+            "Nella scheda «Prezzo», la variazione è quella semplice, $d = P_t/P_{t-n} - 1$, in dollari e in euro."
         )
 
         # ------------------------------------------------------------------

@@ -60,11 +60,6 @@ class Confronto:
     def d_eur(self) -> float:
         return self.ora["eur"] / self.prima["eur"] - 1
 
-    @property
-    def d_clip(self) -> float:
-        """La variazione in euro tagliata a ±10%."""
-        return max(-0.10, min(0.10, self.d_eur))
-
 
 @dataclass
 class Contesto:

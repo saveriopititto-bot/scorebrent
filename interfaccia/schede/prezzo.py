@@ -13,12 +13,9 @@ class SchedaPrezzo(Scheda):
     def mostra(self) -> None:
         c = self.ctx.confronto
         st.caption(f"Ultimo prezzo di chiusura: {c.t:%d/%m/%Y} · confrontato con il {c.data_prima:%d/%m/%Y}")
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         c1.metric("Brent in dollari", f"{c.ora['usd']:.2f} $ al barile", f"{c.d_usd:+.2%}")
         c2.metric("Brent in euro", f"{c.ora['eur']:.2f} € al barile", f"{c.d_eur:+.2%}")
-        c3.metric("Variazione in euro, limitata a ±10%", f"{c.d_clip:+.2%}",
-                  help="La stessa variazione del prezzo in euro, ma tagliata a ±10% "
-                       "per non dare troppo peso ai salti eccezionali.")
         base = self.ctx.base
         dati_grafico = base.loc[base.index >= c.t - pd.Timedelta(days=self.imp.giorni_grafico), ["usd", "eur"]]
         Grafici.nel_tempo(dati_grafico.rename(columns={"usd": "Dollari al barile", "eur": "Euro al barile"}),
