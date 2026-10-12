@@ -11,6 +11,7 @@ import streamlit as st
 
 import brent_math as bm
 import dati
+import formule
 import style
 
 # Con ?pagina=score l'app mostra solo la scheda «Score rifornimento», senza titolo né barra laterale: è la
@@ -261,9 +262,11 @@ if usa_gpr:
 if SOLO_SCORE:
     tab_score = st.container(key="card-score")  # scheda bianca, come nella versione con le schede
 else:
-    tab1, tab_score, tab_prev, tab_pompa, tab2, tab3, tab_geo, tab4, tab5 = st.tabs(
+    tab1, tab_score, tab_prev, tab_pompa, tab2, tab3, tab_geo, tab4, tab5, tab_formule = st.tabs(
         ["Prezzo", "Score rifornimento", "Prossimi 5 giorni", "Pompa (Italia)", "Andamento", "Meteo", "Geopolitica",
-         "Prova di previsione", "Oscillazione attesa"])
+         "Prova di previsione", "Oscillazione attesa", "Formule"])
+    with tab_formule:  # solo testo: si mostra anche se poi il calcolo di un'altra scheda si interrompe
+        formule.mostra()
 
 # --------------------------------------------------------------------------
 # Scheda 1 - Prezzo
