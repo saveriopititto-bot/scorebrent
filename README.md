@@ -12,7 +12,7 @@ Le altre schede servono ad approfondire: andamento del prezzo, meteo, geopolitic
 
 ## Cosa mostra
 
-L'app ha nove schede.
+L'app ha dieci schede.
 
 - **Prezzo**: ultimo prezzo di chiusura in dollari e in euro al barile, variazione rispetto a *n* giorni prima e grafico del periodo scelto (da 1 mese a tutto lo storico, che parte dal 2007).
 - **Score rifornimento**: un adattamento dello SCORE 4.0 che dà ogni giorno uno di tre esiti.
@@ -52,6 +52,7 @@ L'app ha nove schede.
   - Nella prova c'è anche un modello con il rischio geopolitico (GPR).
   - La prova a finestre scorrevoli confronta i modelli con tre riferimenti: «come nel periodo appena passato», «OVX così com'è» e «media storica».
   - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
+- **Formule**: tutte le formule del modello matematico, con spiegazioni e passaggi, nell'ordine in cui vengono applicate: dati e notazione, variazioni e riepiloghi, area di Lévy, temperatura rispetto al normale, prova di previsione del rialzo (regressione logistica, Brier, AUC), oscillazione attesa (regressione ridge e correzione lognormale), fasce dei prossimi 5 giorni, score di rifornimento e prezzi alla pompa. Accanto a ogni formula c'è il nome della funzione di `brent_math.py` che la calcola.
 
 ## Impostazioni
 
@@ -241,6 +242,7 @@ Opzioni: `--giorni N` (0 = tutto lo storico), `--alpha` e `--theta` (default 1).
 | File | Contenuto |
 |---|---|
 | `app.py` | L'interfaccia: download di prezzi, OVX, GPR, temperature e prezzi alla pompa, schede, grafici e testi. |
+| `formule.py` | La scheda «Formule»: tutte le formule del modello in LaTeX, con spiegazioni e passaggi. Solo testo, non usa i dati scaricati. |
 | `style.py` | Lo stile di FuelMode: CSS globale e colori della palette, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
 | `brent_math.py` | La matematica: variazioni fra periodi, riepiloghi, area di Lévy, sigma e MAD, temperatura rispetto al normale, regressione logistica, previsione dell'oscillazione, score di rifornimento (`score_storico`), ritardo della pompa e prova a finestre scorrevoli. Non dipende da Streamlit. |
 | `dati.py` | Download da Yahoo Finance (Brent, cambio, OVX) e preparazione dei prezzi, senza Streamlit: lo usano sia l'app sia lo script di esportazione. |
