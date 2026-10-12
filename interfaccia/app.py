@@ -20,20 +20,14 @@ class App:
     def esegui(self) -> None:
         st.set_page_config(page_title="Prezzo del petrolio", page_icon="🛢️", layout="wide",
                            initial_sidebar_state="collapsed" if self.solo_score else "auto")
-        Stile.applica()  # stile di FuelMode; il titolo dell'app è nella barra delle schede
+        Stile.applica()  # stile di FuelMode
         if self.solo_score:
             Stile.senza_cornice()
 
-        imp = Impostazioni.da_barra_laterale()
+        ctx = Contesto.carica(Impostazioni.da_barra_laterale())
         if self.solo_score:
-            imp = imp.per_score()
-        ctx = Contesto.carica(imp)
-
-        if self.solo_score:
-            with st.container(key="card-score"):  # scheda bianca, come nella versione con le schede
-                SchedaScore(ctx).mostra_protetta()
-            return
-        sezione = Menu.scegli()  # si calcolano solo le schede della sezione scelta
-        for scheda, tab in zip(sezione.schede, st.tabs([s.titolo for s in sezione.schede])):
-            with tab:
-                scheda(ctx).mostra_protetta()
+            scheda = SchedaScore
+        else:
+            _, scheda = Menu.scegli()
+        with st.container(key="card-scheda"):  # si calcola solo la scheda aperta
+            scheda(ctx).mostra_protetta()

@@ -1,9 +1,10 @@
 """Tutto quello che le schede condividono: impostazioni, dati scaricati e calcoli comuni (serie e score)."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -67,14 +68,11 @@ class Confronto:
 
 @dataclass
 class Contesto:
+    """I dati esterni si scaricano solo quando una scheda li chiede, la prima volta (poi restano in cache)."""
+
     imp: Impostazioni
     prezzi: PrezziBrent
     confronto: Confronto
-    meteo: DatoFacoltativo   # temperatura rispetto al normale stagionale (°C)
-    ovx: DatoFacoltativo     # chiusure dell'OVX (% annuo)
-    pompa: DatoFacoltativo   # prezzi settimanali alla pompa in Italia
-    gpr: DatoFacoltativo     # rischio geopolitico giornaliero
-    parametri_score: ScoreRifornimento
 
     @classmethod
     def carica(cls, imp: Impostazioni) -> Contesto:
@@ -93,21 +91,37 @@ class Contesto:
             st.error("I prezzi scaricati non arrivano così indietro nel tempo.")
             st.stop()
         data_prima = base.index[base.index <= tn][-1]
-        confronto = Confronto(t, data_prima, base.loc[t], base.loc[data_prima])
 
-        return cls(
-            imp, prezzi, confronto,
-            meteo=DatoFacoltativo.prova(imp.usa_meteo, lambda: AnomaliaStagionale().calcola(
-                Caricamento.meteo(base.index[0], t))),
-            ovx=DatoFacoltativo.prova(imp.usa_ovx, lambda: Caricamento.yahoo(FonteYahoo.OVX)["Close"]),
-            pompa=DatoFacoltativo.prova(imp.usa_pompa, Caricamento.pompa),
-            gpr=DatoFacoltativo.prova(imp.usa_gpr, Caricamento.gpr),
-            parametri_score=ScoreRifornimento(imp.alpha, imp.theta),
-        )
+        return cls(imp, prezzi, Confronto(t, data_prima, base.loc[t], base.loc[data_prima]))
 
     @property
     def base(self) -> pd.DataFrame:
         return self.prezzi.tabella
+
+    @cached_property
+    def meteo(self) -> DatoFacoltativo:
+        """Temperatura rispetto al normale stagionale (°C)."""
+        return DatoFacoltativo.prova(self.imp.usa_meteo, lambda: AnomaliaStagionale().calcola(
+            Caricamento.meteo(self.base.index[0], self.confronto.t)))
+
+    @cached_property
+    def ovx(self) -> DatoFacoltativo:
+        """Chiusure dell'OVX (% annuo)."""
+        return DatoFacoltativo.prova(self.imp.usa_ovx, lambda: Caricamento.yahoo(FonteYahoo.OVX)["Close"])
+
+    @cached_property
+    def pompa(self) -> DatoFacoltativo:
+        """Prezzi settimanali alla pompa in Italia."""
+        return DatoFacoltativo.prova(self.imp.usa_pompa, Caricamento.pompa)
+
+    @cached_property
+    def gpr(self) -> DatoFacoltativo:
+        """Rischio geopolitico giornaliero."""
+        return DatoFacoltativo.prova(self.imp.usa_gpr, Caricamento.gpr)
+
+    @property
+    def parametri_score(self) -> ScoreRifornimento:
+        return ScoreRifornimento(self.imp.alpha, self.imp.theta)
 
     @cached_property
     def serie(self) -> SerieAnalisi:
@@ -125,7 +139,7 @@ class Contesto:
         """Score e oscillazione attesa giorno per giorno, usati da «Score rifornimento» e «Prossimi 5 giorni»: è lo
         stesso calcolo che esporta_score.py scrive in Supabase."""
         try:
-            return self.parametri_score.storico(self.prezzi, self.ovx_giornaliero), None
+            return Caricamento.storico_score(self.prezzi, self.ovx_giornaliero, self.parametri_score), None
         except Exception as e:
             return None, str(e)
 

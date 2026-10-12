@@ -1,7 +1,7 @@
 """Impostazioni scelte dall'utente nella barra laterale."""
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import streamlit as st
 
@@ -30,10 +30,6 @@ class Impostazioni:
     @property
     def unita(self) -> str:
         return self.freq.unita
-
-    def per_score(self) -> Impostazioni:
-        """Versione incorporata in FuelMode: meteo e rischio geopolitico non servono allo score."""
-        return replace(self, usa_meteo=False, usa_gpr=False)
 
     @classmethod
     def da_barra_laterale(cls) -> Impostazioni:

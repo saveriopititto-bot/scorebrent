@@ -31,4 +31,5 @@ SEZIONI: tuple[Sezione, ...] = (
 )
 SCHEDE: tuple[type[Scheda], ...] = tuple(s for sezione in SEZIONI for s in sezione.schede)
 
-__all__ = ["SCHEDE", "SEZIONI", "Scheda", "Sezione", *(s.__name__ for s in SCHEDE)]
+__all__ = ["SCHEDE", "SEZIONI", "Scheda", "SchedaAndamento", "SchedaFormule", "SchedaGeopolitica", "SchedaMeteo",
+           "SchedaOscillazione", "SchedaPompa", "SchedaPrezzo", "SchedaProssimi", "SchedaProva", "SchedaScore", "Sezione"]

@@ -1,10 +1,10 @@
 # Prezzo del petrolio (Brent)
 
-App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici. L'aspetto è lo stesso di [FuelMode](https://fuelmode.streamlit.app/): palette blu petrolio e arancione, font Archivo, barra laterale e contenuto in schede bianche arrotondate, in alto un menù con il nome dell'app e tre sezioni.
+App [Streamlit](https://streamlit.io) che scarica il prezzo del petrolio Brent da Yahoo Finance, lo converte in euro e ne analizza l'andamento. Ogni giorno dà uno **score di rifornimento** (+1 rifornisci, 0 neutro, −1 aspetta) e una previsione per i prossimi 5 giorni. Può usare anche la temperatura in Europa, da [Open-Meteo](https://open-meteo.com), l'indice di volatilità del petrolio OVX, il rischio geopolitico (GPR) e i prezzi settimanali alla pompa in Italia, per capire se aiutano a prevedere il prezzo e quanto oscillerà. Tutta l'interfaccia è in italiano, con i termini tecnici spiegati in parole semplici. L'aspetto è lo stesso di [FuelMode](https://fuelmode.streamlit.app/): palette blu petrolio e arancione, font Archivo, barra laterale e contenuto in schede bianche arrotondate, in alto un menù con tutti i bottoni su una riga.
 
 ## Da dove partire
 
-Il menù in alto ha tre bottoni; sotto compaiono le schede della sezione scelta.
+Il menù in alto ha, sulla stessa riga, i tre bottoni delle sezioni (blu scuro quello scelto) e quelli delle schede della sezione (azzurro quella aperta). Sugli schermi stretti le schede vanno a capo.
 
 | Sezione | Schede | A cosa serve |
 |---|---|---|
@@ -16,7 +16,11 @@ Il menù in alto ha tre bottoni; sotto compaiono le schede della sezione scelta.
 2. **Prossimi 5 giorni**: fin dove può arrivare il Brent nei prossimi giorni.
 3. **Pompa (Italia)**: i prezzi medi di benzina e gasolio, e dopo quante settimane seguono il Brent.
 
-La sezione scelta finisce nell'indirizzo, quindi si può aprire direttamente: `?sezione=Mercato` o `?sezione=Modelli`. Si calcolano solo le schede della sezione aperta, così la pagina è più veloce.
+La sezione scelta finisce nell'indirizzo, quindi si può aprire direttamente: `?sezione=Mercato` o `?sezione=Modelli`. Ogni sezione ricorda l'ultima scheda aperta. Per andare veloce:
+
+- si calcola solo la scheda aperta;
+- i dati esterni si scaricano solo quando una scheda li usa (all'apertura, sullo score, servono solo prezzi, OVX e prezzi alla pompa; temperature e GPR arrivano aprendo le loro schede o i modelli);
+- lo score di ogni giorno resta in memoria e si ricalcola solo se cambiano i prezzi, α o θ.
 
 ## Cosa mostra
 
@@ -296,11 +300,11 @@ Se una modifica al modello cambia i risultati di proposito, `test_regressione.py
 | `brent/score.py` | `ScoreRifornimento` (score, storico e verifica sul Brent), `Esito` (+1, 0, −1) e `StoricoScore`. |
 | `brent/pompa.py` | `AnalisiPompa`: ritardo della pompa rispetto al Brent e verifica dello score sui prezzi alla pompa. |
 | `interfaccia/` | L'interfaccia Streamlit. |
-| `interfaccia/app.py` | `App`: configura la pagina, legge le impostazioni, carica i dati e mostra le schede della sezione scelta (o la sola scheda dello score con `?pagina=score`). |
-| `interfaccia/menu.py` | `Menu`: il nome dell'app e i bottoni delle sezioni, con la sezione scelta nell'indirizzo (`?sezione=`). |
+| `interfaccia/app.py` | `App`: configura la pagina, legge le impostazioni, carica i dati e mostra la scheda scelta (o la sola scheda dello score con `?pagina=score`). |
+| `interfaccia/menu.py` | `Menu`: i bottoni delle sezioni e delle schede su una riga, con la sezione scelta nell'indirizzo (`?sezione=`). |
 | `interfaccia/impostazioni.py` | `Impostazioni`: la barra laterale. |
-| `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py` con la cache di Streamlit. |
-| `interfaccia/contesto.py` | `Contesto`: impostazioni, dati scaricati (`DatoFacoltativo` per quelli che possono mancare) e calcoli condivisi dalle schede, come lo score. |
+| `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py` e il calcolo dello score, con la cache di Streamlit. |
+| `interfaccia/contesto.py` | `Contesto`: impostazioni, dati scaricati al primo uso (`DatoFacoltativo` per quelli che possono mancare) e calcoli condivisi dalle schede, come lo score. |
 | `interfaccia/grafici.py` | `Grafici`: i grafici nel tempo con le date in formato italiano. |
 | `interfaccia/stile.py` | `Palette` e `Stile`: lo stile di FuelMode, CSS globale e colori, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
 | `interfaccia/schede/` | Una classe per scheda, tutte figlie di `Scheda` (`base.py`): `SchedaPrezzo`, `SchedaScore`, `SchedaProssimi`, `SchedaPompa`, `SchedaAndamento`, `SchedaMeteo`, `SchedaGeopolitica`, `SchedaProva`, `SchedaOscillazione`, `SchedaFormule`. Le sezioni del menù e l'ordine delle schede sono in `schede/__init__.py` (`SEZIONI`). Se una scheda va in errore, l'errore resta dentro la scheda e le altre si vedono lo stesso. |

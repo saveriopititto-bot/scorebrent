@@ -11,7 +11,7 @@ from ..impostazioni import Impostazioni
 
 
 class Scheda(ABC):
-    """Una scheda dell'app: il titolo va nella barra delle schede, `mostra` ne disegna il contenuto."""
+    """Una scheda dell'app: il titolo è il suo bottone nel menù, `mostra` ne disegna il contenuto."""
 
     titolo: ClassVar[str]
 

@@ -8,7 +8,12 @@ import numpy as np
 import pandas as pd
 
 from .cammino import CamminoPiano
-from .modelli import FinestreScorrevoli, InsiemiPredittori, Punteggi, RegressioneLogistica
+from .modelli import (
+    FinestreScorrevoli,
+    InsiemiPredittori,
+    Punteggi,
+    RegressioneLogistica,
+)
 
 
 @dataclass(frozen=True)

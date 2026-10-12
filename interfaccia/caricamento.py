@@ -1,14 +1,17 @@
-"""Download dei dati con la cache di Streamlit: le fonti sono in brent/fonti.py."""
+"""Download dei dati e calcoli lunghi con la cache di Streamlit: le fonti sono in brent/fonti.py."""
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
 from brent.fonti import FonteGpr, FonteMeteo, FontePompa, FonteYahoo
+from brent.mercato import PrezziBrent
+from brent.score import ScoreRifornimento, StoricoScore
 
 
 class Caricamento:
-    """Ogni metodo scarica una fonte e ne tiene il risultato in cache per il tempo indicato."""
+    """Ogni metodo scarica una fonte, o fa un calcolo lungo, e ne tiene il risultato in cache."""
 
     @staticmethod
     @st.cache_data(ttl=900, show_spinner="Scarico i prezzi da Yahoo Finance…")
@@ -29,3 +32,10 @@ class Caricamento:
     @st.cache_data(ttl=12 * 3600, show_spinner="Scarico i prezzi alla pompa in Italia…")
     def pompa() -> pd.DataFrame:
         return FontePompa().scarica()
+
+    @staticmethod
+    @st.cache_data(ttl=900, show_spinner="Calcolo lo score…", max_entries=20,
+                   hash_funcs={PrezziBrent: lambda p: pd.util.hash_pandas_object(p.tabella).sum()})
+    def storico_score(prezzi: PrezziBrent, ovx: np.ndarray | None, parametri: ScoreRifornimento) -> StoricoScore:
+        """Lo score di ogni giorno: si ricalcola solo se cambiano prezzi, OVX, α o θ, non a ogni clic."""
+        return parametri.storico(prezzi, ovx)
