@@ -124,6 +124,15 @@ section[data-testid="stSidebar"] > [data-testid="stSidebarContent"] {{ backgroun
 .stButton button[kind="secondary"] {{ background: {Palette.N200}; color: {Palette.DEEP}; }}
 .stButton button[kind="secondary"]:hover {{ background: {Palette.N300}; color: {Palette.DEEP}; }}
 
+/* colofon a piè di pagina, come in Refillo */
+.x-colophon {{ display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+  padding: 2px 8px 0; font-size: 12px; color: {Palette.N700}; text-align: center; }}
+.x-colophon-brand {{ font-weight: 800; letter-spacing: -0.015em; color: {Palette.DEEP}; }}
+.x-colophon-ver {{ display: inline-flex; align-items: center; font-size: 11px; font-weight: 700;
+  padding: 1px 7px; border-radius: 999px; background: {Palette.N200}; color: {Palette.BLUE_GREEN}; letter-spacing: .02em; }}
+.x-colophon-dot {{ color: {Palette.N500}; }}
+.x-colophon-text {{ color: {Palette.N700}; font-size: 12px; }}
+
 /* metriche di st.metric: riquadri tenui */
 div[data-testid="stMetric"] {{ background: {Palette.N100}; border-radius: var(--radius-md); padding: 16px 20px; }}
 [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {{ text-transform: uppercase !important; letter-spacing: .08em; font-size: 11px; color: {Palette.N700}; }}
@@ -151,3 +160,13 @@ class Stile:
                     "[data-testid='stMainBlockContainer'] {padding: 0 !important;} "
                     "[data-testid='stMain'] [data-testid='stElementContainer']:has(style) {display: none;}</style>",
                     unsafe_allow_html=True)
+
+    @staticmethod
+    def colofon() -> None:
+        """Colofon a piè di pagina, uguale a quello di Refillo: sCore lab, versione e diritti."""
+        st.markdown('<div class="x-colophon" role="contentinfo">'
+                    '<span class="x-colophon-brand">sCore lab</span>'
+                    '<span class="x-colophon-ver">v1.0</span>'
+                    '<span class="x-colophon-dot">·</span>'
+                    '<span class="x-colophon-text">Tutti i diritti riservati</span>'
+                    '</div>', unsafe_allow_html=True)

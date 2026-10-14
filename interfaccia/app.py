@@ -31,3 +31,5 @@ class App:
             _, scheda = Menu.scegli()
         with st.container(key="card-scheda"):  # si calcola solo la scheda aperta
             scheda(ctx).mostra_protetta()
+        if not self.solo_score:  # nella pagina incorporata in FuelMode c'è già il colofon di FuelMode
+            Stile.colofon()
