@@ -195,3 +195,11 @@ def test_un_errore_resta_nella_sua_scheda(rete, monkeypatch):
     at.run()
     nessun_errore(at)
     assert "Brent in euro" in etichette(at)
+
+
+def test_colofon(rete):
+    colofon = lambda at: [m for m in valori(at, "markdown") if 'class="x-colophon"' in m]  # noqa: E731
+    at = avvia(sezione="Mercato")
+    assert len(colofon(at)) == 1
+    assert all(t in colofon(at)[0] for t in ("sCore lab", "v1.0", "Tutti i diritti riservati"))
+    assert not colofon(avvia(query={"pagina": "score"}))  # non nella pagina per FuelMode

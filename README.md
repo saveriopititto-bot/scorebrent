@@ -22,6 +22,8 @@ La sezione scelta finisce nell'indirizzo, quindi si può aprire direttamente: `?
 - i dati esterni si scaricano solo quando una scheda li usa (all'apertura, sullo score, servono solo prezzi, OVX e prezzi alla pompa; temperature e GPR arrivano aprendo le loro schede o i modelli);
 - lo score di ogni giorno resta in memoria e si ricalcola solo se cambiano i prezzi, α o θ.
 
+A piè di pagina, sotto ogni scheda, c'è il colofon **sCore lab** con versione e diritti riservati, uguale a quello di Refillo. Non compare nella pagina incorporata in FuelMode (`?pagina=score`), che ha già il suo.
+
 ## Cosa mostra
 
 L'app ha dieci schede, divise nelle tre sezioni del menù.
@@ -306,7 +308,7 @@ Se una modifica al modello cambia i risultati di proposito, `test_regressione.py
 | `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py` e il calcolo dello score, con la cache di Streamlit. |
 | `interfaccia/contesto.py` | `Contesto`: impostazioni, dati scaricati al primo uso (`DatoFacoltativo` per quelli che possono mancare) e calcoli condivisi dalle schede, come lo score. |
 | `interfaccia/grafici.py` | `Grafici`: i grafici nel tempo con le date in formato italiano. |
-| `interfaccia/stile.py` | `Palette` e `Stile`: lo stile di FuelMode, CSS globale e colori, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
+| `interfaccia/stile.py` | `Palette` e `Stile`: lo stile di FuelMode, CSS globale, colofon e colori, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
 | `interfaccia/schede/` | Una classe per scheda, tutte figlie di `Scheda` (`base.py`): `SchedaPrezzo`, `SchedaScore`, `SchedaProssimi`, `SchedaPompa`, `SchedaAndamento`, `SchedaMeteo`, `SchedaGeopolitica`, `SchedaProva`, `SchedaOscillazione`, `SchedaFormule`. Le sezioni del menù e l'ordine delle schede sono in `schede/__init__.py` (`SEZIONI`). Se una scheda va in errore, l'errore resta dentro la scheda e le altre si vedono lo stesso. |
 | `esporta_score.py` | `EsportazioneScore` calcola lo score e prepara le righe, `ClienteSupabase` le scrive nella tabella `brent_score` di Supabase. |
 | `supabase/brent_score.sql` | Crea la tabella `brent_score` e la regola di lettura pubblica. |
