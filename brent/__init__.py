@@ -12,6 +12,7 @@ Moduli
 - oscillazione: previsione dell'oscillazione (regressione sul logaritmo) e sua prova.
 - score: score di rifornimento (adattamento dello SCORE 4.0).
 - pompa: ritardo della pompa rispetto al Brent e verifica dello score sui prezzi alla pompa.
+- capacita: Cp e Cpk dello score su finestre mobili, area di Lévy e rete neurale che li prevede.
 
 Corrispondenze con il paper "sisma" (analisi differenziale + firma del cammino)
 -------------------------------------------------------------------------------

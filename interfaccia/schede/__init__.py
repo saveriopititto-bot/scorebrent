@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from .andamento import SchedaAndamento
 from .base import Scheda
+from .capacita import SchedaCapacita
 from .formule import SchedaFormule
 from .geopolitica import SchedaGeopolitica
 from .meteo import SchedaMeteo
@@ -27,9 +28,9 @@ class Sezione:
 SEZIONI: tuple[Sezione, ...] = (
     Sezione("Rifornimento", (SchedaScore, SchedaProssimi, SchedaPompa)),
     Sezione("Mercato", (SchedaPrezzo, SchedaAndamento, SchedaMeteo, SchedaGeopolitica)),
-    Sezione("Modelli", (SchedaProva, SchedaOscillazione, SchedaFormule)),
+    Sezione("Modelli", (SchedaProva, SchedaOscillazione, SchedaCapacita, SchedaFormule)),
 )
 SCHEDE: tuple[type[Scheda], ...] = tuple(s for sezione in SEZIONI for s in sezione.schede)
 
-__all__ = ["SCHEDE", "SEZIONI", "Scheda", "SchedaAndamento", "SchedaFormule", "SchedaGeopolitica", "SchedaMeteo",
+__all__ = ["SCHEDE", "SEZIONI", "Scheda", "SchedaAndamento", "SchedaCapacita", "SchedaFormule", "SchedaGeopolitica", "SchedaMeteo",
            "SchedaOscillazione", "SchedaPompa", "SchedaPrezzo", "SchedaProssimi", "SchedaProva", "SchedaScore", "Sezione"]

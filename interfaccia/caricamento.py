@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from brent.capacita import FinestreCapacita, LimitiSpecifica, PrevisioneCapacita, ProvaCapacita
 from brent.fonti import FonteGpr, FonteMeteo, FontePompa, FonteYahoo
 from brent.mercato import PrezziBrent
 from brent.score import ScoreRifornimento, StoricoScore
@@ -39,3 +40,11 @@ class Caricamento:
     def storico_score(prezzi: PrezziBrent, ovx: np.ndarray | None, parametri: ScoreRifornimento) -> StoricoScore:
         """Lo score di ogni giorno: si ricalcola solo se cambiano prezzi, OVX, α o θ, non a ogni clic."""
         return parametri.storico(prezzi, ovx)
+
+    @staticmethod
+    @st.cache_data(ttl=900, show_spinner=False, max_entries=10)
+    def prova_capacita(s: pd.Series, theta: float) -> tuple[ProvaCapacita, tuple[float, float]]:
+        """Prova a finestre scorrevoli della rete su Cp e Cpk dello score e previsione della prossima finestra:
+        dura parecchi secondi, quindi si rifà solo se cambia lo score."""
+        modello = PrevisioneCapacita(FinestreCapacita(limiti=LimitiSpecifica(theta, -theta)))
+        return modello.valida(s), modello.prevedi(s)

@@ -10,7 +10,7 @@ Il menù in alto ha, sulla stessa riga, i tre bottoni delle sezioni (blu scuro q
 |---|---|---|
 | **Rifornimento** | Score rifornimento, Prossimi 5 giorni, Pompa (Italia) | Decidere quando fare il pieno. È la sezione che si apre per prima. |
 | **Mercato** | Prezzo, Andamento, Meteo, Geopolitica | Guardare il Brent e i dati che possono muoverlo. |
-| **Modelli** | Prova di previsione, Oscillazione attesa, Formule | Capire quanto sono affidabili le previsioni e come sono calcolate. |
+| **Modelli** | Prova di previsione, Oscillazione attesa, Capacità dello score, Formule | Capire quanto sono affidabili le previsioni e come sono calcolate. |
 
 1. **Score rifornimento**: l'indicazione di oggi (+1 rifornisci, 0 neutro, −1 aspetta). In fondo alla scheda c'è la verifica con i prezzi veri alla pompa, che dice se seguirlo ha fatto risparmiare.
 2. **Prossimi 5 giorni**: fin dove può arrivare il Brent nei prossimi giorni.
@@ -26,7 +26,7 @@ A piè di pagina, sotto ogni scheda, c'è il colofon **sCore lab** con versione 
 
 ## Cosa mostra
 
-L'app ha dieci schede, divise nelle tre sezioni del menù.
+L'app ha undici schede, divise nelle tre sezioni del menù.
 
 ### Rifornimento
 
@@ -74,7 +74,32 @@ L'app ha dieci schede, divise nelle tre sezioni del menù.
   - Nella prova c'è anche un modello con il rischio geopolitico (GPR).
   - La prova a finestre scorrevoli confronta i modelli con tre riferimenti: «come nel periodo appena passato», «OVX così com'è» e «media storica».
   - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
-- **Formule**: tutte le formule del modello matematico, con spiegazioni e passaggi, nell'ordine in cui vengono applicate: dati e notazione, variazioni e riepiloghi, area di Lévy, temperatura rispetto al normale, prova di previsione del rialzo (regressione logistica, Brier, AUC), oscillazione attesa (regressione ridge e correzione lognormale), fasce dei prossimi 5 giorni, score di rifornimento e prezzi alla pompa. Accanto a ogni formula c'è il nome della classe o del metodo del pacchetto `brent` che la calcola.
+- **Capacità dello score**: quanto lo score resta stabile dentro la fascia «neutro», fra −θ e +θ.
+  - In alto Cp e Cpk degli ultimi 5 giorni di borsa, con la variazione rispetto a ieri, e la quota di quei giorni con esito neutro. Sotto, il grafico di Cp e Cpk nel periodo scelto.
+  - Cp alto vuol dire che lo score oscilla poco rispetto alla larghezza della fascia; Cpk basso che è vicino a uscirne da un lato. Sopra 1, se continua così, lo score resta quasi sempre neutro.
+  - Il bottone «Esegui la prova della rete» addestra la rete neurale (vedi «Capacità dello score (Cp e Cpk)» più sotto) a finestre scorrevoli e la confronta con «domani come oggi». Mostra errori, miglioramento, Cp e Cpk previsti per domani, il grafico del Cpk vero e previsto e l'area di Lévy confrontata con una passeggiata casuale. Ci vuole circa un minuto; poi il risultato resta in memoria finché non cambia lo score.
+  - Usa lo stesso score della scheda «Score rifornimento», quindi cambia con α e θ.
+- **Formule**: tutte le formule del modello matematico, con spiegazioni e passaggi, nell'ordine in cui vengono applicate: dati e notazione, variazioni e riepiloghi, area di Lévy, temperatura rispetto al normale, prova di previsione del rialzo (regressione logistica, Brier, AUC), oscillazione attesa (regressione ridge e correzione lognormale), fasce dei prossimi 5 giorni, score di rifornimento, prezzi alla pompa e capacità dello score (Cp, Cpk, area di Lévy di (S, dS) e back propagation della rete). Accanto a ogni formula c'è il nome della classe o del metodo del pacchetto `brent` che la calcola.
+
+## Capacità dello score (Cp e Cpk)
+
+Lo script `cpk_levy_nn.py` tratta lo score di ogni giorno come un processo da tenere fra due limiti, USL = 1 e LSL = −1 (le soglie ±θ con θ = 1), e prova a prevedere quanto sarà «capace» nella finestra successiva. Lo stesso calcolo è nella scheda «Capacità dello score» della sezione Modelli, dove i limiti seguono θ (±θ invece di ±1).
+
+1. **Serie**: lo score S di ogni giorno (o una colonna di un CSV), con i valori fuori da [−1, 1] portati sul limite. Lo script dice quanti giorni sono stati tagliati: con lo score del Brent sono molti, perché S supera spesso ±1.
+2. **Finestre** di 5 giorni con passo 1. Per ognuna: media μ, deviazione standard σ (ddof = 1, mai sotto 0.01), Cp = (USL − LSL) / 6σ e Cpk = min(USL − μ, μ − LSL) / 3σ, entrambi fra 0 e 10.
+3. **Area di Lévy** del cammino (S, dS), con dS(t) = (S(t+1) − S(t−1)) / 2. È la stessa formula di `CamminoPiano.area_levy`. Attenzione: anche per un moto browniano la media non è 0, perché dS dipende da S e il cammino gira in media in senso orario (su 5 giorni l'area attesa è −s²/2, con s² la varianza degli incrementi). Per questo lo script la confronta con le passeggiate casuali fatte con gli stessi incrementi rimescolati: z oltre ±2 vuol dire che la serie non si muove come una passeggiata casuale. L'errore standard usa le finestre effettive (n / 5), perché quelle vicine condividono quasi tutti i giorni.
+4. **Rete neurale** con uno strato nascosto (16 neuroni tanh, uscita lineare), back propagation scritta in numpy, penalità L2. Ingresso: μ, σ, Cp, Cpk e area delle finestre k e k−1; bersaglio: Cp e Cpk della finestra k+1. Ingressi e bersagli sono standardizzati con le sole statistiche dell'addestramento.
+5. **Prova a finestre scorrevoli**: il primo 70% serve solo per imparare; poi ogni 21 finestre la rete si riaddestra su tutto il passato e prevede il blocco successivo (`FinestreScorrevoli`, come nelle altre prove). Il riferimento è «domani come oggi»: Cp e Cpk della finestra k. Con `--passo 0` c'è un solo taglio 70% / 30%.
+
+```bash
+python cpk_levy_nn.py                          # dati sintetici di prova
+python cpk_levy_nn.py --brent                  # score S dai prezzi del Brent (serve la rete)
+python cpk_levy_nn.py --csv dati.csv --col score_gg
+```
+
+Altre opzioni: `--finestra`, `--train`, `--passo`, `--nascosti`, `--epoche`, `--alpha` e `--theta` (con `--brent`).
+
+**Come leggere il risultato**: due finestre vicine hanno 4 giorni su 5 in comune, quindi «domani come oggi» è un riferimento molto difficile da battere. Sui dati sintetici e sullo score calcolato dai prezzi sintetici dei test la rete fa peggio del riferimento (miglioramento negativo). Una rete utile deve avere miglioramento positivo, non solo un MAE piccolo.
 
 ## Impostazioni
 
@@ -82,9 +107,9 @@ Sono nella barra laterale, in quattro gruppi, tranne la scelta della valuta, che
 
 | Gruppo | Impostazione | Cosa fa | Schede |
 |---|---|---|---|
-| Score rifornimento | Sensibilità alla turbolenza (α) | Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale | Score rifornimento |
-| | Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento |
-| Prezzo e grafici | Periodo mostrato nei grafici | Da 1 mese a tutto lo storico | Score rifornimento, Pompa (Italia), Prezzo, Meteo, Geopolitica |
+| Score rifornimento | Sensibilità alla turbolenza (α) | Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale | Score rifornimento, Capacità dello score |
+| | Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento, Capacità dello score |
+| Prezzo e grafici | Periodo mostrato nei grafici | Da 1 mese a tutto lo storico | Score rifornimento, Pompa (Italia), Prezzo, Meteo, Geopolitica, Capacità dello score |
 | | Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
 | Analisi | Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |
 | | Quanti giorni/settimane analizzare | Quanti periodi recenti mostrare nei grafici e nel riepilogo | Andamento |
@@ -281,7 +306,8 @@ Ci vuole circa un minuto. GitHub li esegue da solo (workflow «Test», `.github/
 | `test_score_pompa.py` | Formula dello score, stabilità, soglie (±θ incluse), storico e verifica; ritardo della pompa e risparmio per pieno. |
 | `test_fonti.py` | Le fonti dati: righe impossibili scartate, almeno 3 città per la temperatura, solo prezzi italiani. |
 | `test_esporta.py` | Righe per Supabase, invio a blocchi da 500, errori dell'API, riga di comando, e che il modello si importi senza Streamlit. |
-| `test_app.py` | L'app intera con il simulatore di Streamlit: il menù e le tre sezioni, settimana per settimana, la pagina per FuelMode, dati esterni spenti o irraggiungibili, Yahoo irraggiungibile, un errore che resta nella sua scheda. |
+| `test_app.py` | L'app intera con il simulatore di Streamlit: il menù e le tre sezioni, settimana per settimana, la prova della rete nella scheda «Capacità dello score», la pagina per FuelMode, dati esterni spenti o irraggiungibili, Yahoo irraggiungibile, un errore che resta nella sua scheda. |
+| `test_capacita.py` | Cp e Cpk, area di Lévy uguale alla formula originale, finestre mobili, back propagation uguale al gradiente numerico, prova che non usa il futuro, riferimento «domani come oggi», area di una passeggiata casuale e riga di comando. |
 | `test_regressione.py` | Lo score di ogni giorno (quello che va in Supabase) e le tabelle delle due prove devono restare uguali ai valori salvati in `tests/riferimenti/`. |
 
 Se una modifica al modello cambia i risultati di proposito, `test_regressione.py` fallisce: si controlla che la differenza sia quella voluta e si rigenerano i valori di riferimento con `python -m tests.riferimenti`.
@@ -300,17 +326,19 @@ Se una modifica al modello cambia i risultati di proposito, `test_regressione.py
 | `brent/rialzo.py` | `PrevisioneRialzo`: predittori della finestra mobile e prova della previsione del rialzo. |
 | `brent/oscillazione.py` | `PrevisioneOscillazione`: predittori, previsione, previsione scorrevole e prova dell'oscillazione. |
 | `brent/score.py` | `ScoreRifornimento` (score, storico e verifica sul Brent), `Esito` (+1, 0, −1) e `StoricoScore`. |
+| `brent/capacita.py` | `LimitiSpecifica` (Cp, Cpk), `FinestreCapacita` (finestre mobili e area di Lévy), `ReteNeurale` (strato nascosto e back propagation), `PrevisioneCapacita` (prova a finestre scorrevoli e previsione) e `AreaLevyRiepilogo`. |
 | `brent/pompa.py` | `AnalisiPompa`: ritardo della pompa rispetto al Brent e verifica dello score sui prezzi alla pompa. |
 | `interfaccia/` | L'interfaccia Streamlit. |
 | `interfaccia/app.py` | `App`: configura la pagina, legge le impostazioni, carica i dati e mostra la scheda scelta (o la sola scheda dello score con `?pagina=score`). |
 | `interfaccia/menu.py` | `Menu`: i bottoni delle sezioni e delle schede su una riga, con la sezione scelta nell'indirizzo (`?sezione=`). |
 | `interfaccia/impostazioni.py` | `Impostazioni`: la barra laterale. |
-| `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py` e il calcolo dello score, con la cache di Streamlit. |
+| `interfaccia/caricamento.py` | `Caricamento`: le fonti di `brent/fonti.py`, il calcolo dello score e la prova della rete su Cp e Cpk, con la cache di Streamlit. |
 | `interfaccia/contesto.py` | `Contesto`: impostazioni, dati scaricati al primo uso (`DatoFacoltativo` per quelli che possono mancare) e calcoli condivisi dalle schede, come lo score. |
 | `interfaccia/grafici.py` | `Grafici`: i grafici nel tempo con le date in formato italiano. |
 | `interfaccia/stile.py` | `Palette` e `Stile`: lo stile di FuelMode, CSS globale, colofon e colori, usati anche per gli esiti dello score (verde +1, arancione 0, rosso −1). |
-| `interfaccia/schede/` | Una classe per scheda, tutte figlie di `Scheda` (`base.py`): `SchedaPrezzo`, `SchedaScore`, `SchedaProssimi`, `SchedaPompa`, `SchedaAndamento`, `SchedaMeteo`, `SchedaGeopolitica`, `SchedaProva`, `SchedaOscillazione`, `SchedaFormule`. Le sezioni del menù e l'ordine delle schede sono in `schede/__init__.py` (`SEZIONI`). Se una scheda va in errore, l'errore resta dentro la scheda e le altre si vedono lo stesso. |
+| `interfaccia/schede/` | Una classe per scheda, tutte figlie di `Scheda` (`base.py`): `SchedaPrezzo`, `SchedaScore`, `SchedaProssimi`, `SchedaPompa`, `SchedaAndamento`, `SchedaMeteo`, `SchedaGeopolitica`, `SchedaProva`, `SchedaOscillazione`, `SchedaCapacita`, `SchedaFormule`. Le sezioni del menù e l'ordine delle schede sono in `schede/__init__.py` (`SEZIONI`). Se una scheda va in errore, l'errore resta dentro la scheda e le altre si vedono lo stesso. |
 | `esporta_score.py` | `EsportazioneScore` calcola lo score e prepara le righe, `ClienteSupabase` le scrive nella tabella `brent_score` di Supabase. |
+| `cpk_levy_nn.py` | Riga di comando per Cp e Cpk dello score e la loro previsione con la rete neurale. |
 | `supabase/brent_score.sql` | Crea la tabella `brent_score` e la regola di lettura pubblica. |
 | `.github/workflows/esporta-score.yml` | Esegue l'esportazione ogni giorno di borsa e su richiesta. |
 | `requirements.txt` | Le librerie Python dell'app. |

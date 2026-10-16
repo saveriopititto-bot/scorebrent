@@ -423,5 +423,38 @@ class SchedaFormule(Scheda):
             "$Q_w - Q_{w+h} = -(Q_{w+h} - Q_w)$. In tabella ci sono la media di $G_w$ e la quota di settimane con "
             "$G_w > 0$."
         )
+        # ------------------------------------------------------------------
+        self._sezione("10. Capacità dello score (`brent.capacita`)")
+        st.markdown(
+            "Lo score $S_t$, portato dentro $[\\mathrm{LSL}, \\mathrm{USL}] = [-\\theta, +\\theta]$, si divide in "
+            "finestre di 5 giorni di borsa con passo 1. Su ognuna (`FinestreCapacita`), con $\\mu$ la media e "
+            "$\\sigma$ la deviazione standard campionaria (mai sotto 0,01):"
+        )
+        st.latex(r"C_p = \frac{\mathrm{USL} - \mathrm{LSL}}{6\sigma}, \qquad "
+                 r"C_{pk} = \frac{\min(\mathrm{USL} - \mu,\ \mu - \mathrm{LSL})}{3\sigma}, \qquad 0 \le C_{pk} \le C_p \le 10")
+        st.markdown("**Area di Lévy** del cammino $(S, \\dot S)$, con la differenza centrale "
+                    "$\\dot S_t = (S_{t+1} - S_{t-1})/2$ sui 3 giorni interni, con la formula della sezione 3. Anche "
+                    "per una passeggiata casuale con incrementi di varianza $s^2$ la media non è 0:")
+        st.latex(r"\mathbb E[A] = -\frac{s^2}{2}")
+        st.markdown(
+            "*Passaggio:* con incrementi $e_1,\\dots,e_4$ resta un solo termine, "
+            "$A = \\tfrac14\\big[e_2(e_3+e_4-e_1-e_2) - (e_3-e_1)(e_2+e_3)\\big]$, e con incrementi indipendenti "
+            "$\\mathbb E[A] = \\tfrac14(-s^2 - s^2)$. Per questo l'area si confronta con le passeggiate casuali "
+            "fatte con gli stessi incrementi rimescolati (`AreaLevyRiepilogo`)."
+        )
+        st.markdown(
+            "**Rete neurale** (`ReteNeurale`): ingresso $u$ = $(\\mu, \\sigma, C_p, C_{pk}, A)$ delle finestre $k$ e "
+            "$k-1$, standardizzato; uscita = $(C_p, C_{pk})$ della finestra $k+1$, standardizzati."
+        )
+        st.latex(r"h = \tanh(u W_1 + b_1), \qquad \hat y = h W_2 + b_2, \qquad "
+                 r"L = \frac1N\sum_i \lVert \hat y_i - y_i\rVert^2 + \frac{\lambda}{2}\big(\lVert W_1\rVert^2 + \lVert W_2\rVert^2\big)")
+        st.markdown("*Back propagation:* con $\\delta = 2(\\hat Y - Y)/N$,")
+        st.latex(r"\frac{\partial L}{\partial W_2} = h^\top\delta + \lambda W_2, \qquad "
+                 r"\frac{\partial L}{\partial W_1} = U^\top\big[(\delta W_2^\top)\odot(1 - h^2)\big] + \lambda W_1")
+        st.markdown(
+            "perché $\\tanh' = 1 - \\tanh^2$. 16 neuroni, 3000 passi di discesa del gradiente con passo 0,01 e "
+            "$\\lambda = 10^{-4}$. La prova è a finestre scorrevoli (come nella sezione 5, con $H = 1$ finestra) e "
+            "il riferimento è $\\hat C_{p,k+1} = C_{p,k}$, $\\hat C_{pk,k+1} = C_{pk,k}$."
+        )
         st.caption("Le formule descrivono il codice del pacchetto brent. L'app ha scopo di analisi e non è "
                    "un consiglio di investimento.")

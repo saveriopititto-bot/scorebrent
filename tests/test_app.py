@@ -54,7 +54,7 @@ def nessun_errore(at):
 
 def test_ogni_scheda_sta_in_una_sezione():
     assert sorted(s.__name__ for s in SCHEDE) == sorted({s.__name__ for sez in SEZIONI for s in sez.schede})
-    assert len(SCHEDE) == 10 and [s.nome for s in SEZIONI] == ["Rifornimento", "Mercato", "Modelli"]
+    assert len(SCHEDE) == 11 and [s.nome for s in SEZIONI] == ["Rifornimento", "Mercato", "Modelli"]
 
 
 def test_menu_si_apre_su_rifornimento(rete):
@@ -72,7 +72,8 @@ def test_ogni_scheda_si_apre(rete):
     """Tutte le schede, una alla volta, senza errori; ognuna mostra le sue metriche."""
     attese = {"Prossimi 5 giorni": "Oscillazione attesa", "Pompa (Italia)": "Benzina", "Prezzo": "Brent in euro",
               "Andamento": "Valore più recente", "Meteo": "Media degli ultimi 30 giorni",
-              "Geopolitica": "Minacce / atti (30 giorni)", "Oscillazione attesa": "Movimento probabile in 5 giorni"}
+              "Geopolitica": "Minacce / atti (30 giorni)", "Oscillazione attesa": "Movimento probabile in 5 giorni",
+              "Capacità dello score": "Cpk ultimi 5 giorni"}
     for sezione in SEZIONI:
         for scheda in sezione.schede:
             at = avvia(sezione=sezione.nome, scheda=scheda.titolo)
@@ -101,6 +102,15 @@ def test_le_due_prove(rete):
     assert len(at.dataframe) == 1 and any("Periodo di verifica" in c for c in valori(at, "caption"))
     at = avvia(sezione="Modelli", scheda="Formule")
     assert any("### 8. Score rifornimento" in m for m in valori(at, "markdown"))
+    assert any("### 10. Capacità dello score" in m for m in valori(at, "markdown"))
+
+
+def test_prova_della_capacita(rete):
+    at = avvia(sezione="Modelli", scheda="Capacità dello score", bottoni=("Esegui la prova della rete",))
+    nessun_errore(at)
+    assert len(at.dataframe) == 1 and any("Periodo di verifica" in c for c in valori(at, "caption"))
+    assert {"Cp previsto per domani", "Cpk previsto per domani"} <= set(etichette(at))
+    assert any("Area di Lévy" in c for c in valori(at, "caption"))
 
 
 def test_settimana_per_settimana(rete):
