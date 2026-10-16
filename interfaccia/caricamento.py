@@ -43,8 +43,8 @@ class Caricamento:
 
     @staticmethod
     @st.cache_data(ttl=900, show_spinner=False, max_entries=10)
-    def prova_capacita(s: pd.Series, theta: float) -> tuple[ProvaCapacita, tuple[float, float]]:
+    def prova_capacita(s: pd.Series) -> tuple[ProvaCapacita, tuple[float, float]]:
         """Prova a finestre scorrevoli della rete su Cp e Cpk dello score e previsione della prossima finestra:
         dura parecchi secondi, quindi si rifà solo se cambia lo score."""
-        modello = PrevisioneCapacita(FinestreCapacita(limiti=LimitiSpecifica(theta, -theta)))
+        modello = PrevisioneCapacita(FinestreCapacita(limiti=LimitiSpecifica()))  # limiti fissi ±1
         return modello.valida(s), modello.prevedi(s)
