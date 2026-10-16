@@ -20,22 +20,26 @@ class SchedaCapacita(Scheda):
         if self.ctx.errore_score is not None:
             st.error(f"Non riesco a calcolare lo score: {self.ctx.errore_score}")
             return
-        theta = self.ctx.parametri_score.soglia
+        limiti = LimitiSpecifica()
         st.markdown(
-            "Lo score si tratta come un processo che dovrebbe restare fra due limiti, qui le soglie "
-            f"**±θ = ±{theta:.2f}** (sopra e sotto si passa a +1 e −1). Su ogni finestra di **5 giorni di borsa**:\n"
+            "Lo score si tratta come un processo che dovrebbe restare fra due limiti fissi, **−1 e +1**: le soglie "
+            "dello score con θ = 1, sopra e sotto le quali si passa a +1 e −1. Su ogni finestra di **5 giorni di "
+            "borsa**:\n"
             "- **Cp** dice quanto lo score oscilla rispetto alla larghezza della fascia: alto = si muove poco;\n"
             "- **Cpk** guarda anche dove sta la media: basso = lo score è vicino a uscire da un lato, anche se "
             "oscilla poco.\n\n"
             "Valori sopra 1 vogliono dire che, se continua così, lo score resta quasi sempre dentro la fascia."
         )
         s = self.ctx.score.tabella["S"]
-        finestre = FinestreCapacita(limiti=LimitiSpecifica(theta, -theta))
+        finestre = FinestreCapacita(limiti=limiti)
         W = finestre.tabella(s)
         if len(W) < 2:
             st.error("Troppo pochi giorni di score per calcolare Cp e Cpk.")
             return
-        self._oggi(W, s, theta)
+        self._oggi(W, s, limiti)
+        theta = self.ctx.parametri_score.soglia
+        if theta != limiti.usl:
+            st.caption(f"I limiti restano ±1 anche con la soglia θ = {theta:.2f} scelta nella barra laterale.")
         self._grafico(W)
 
         st.markdown("**Si può prevedere la prossima finestra?** Una rete neurale con uno strato nascosto prevede Cp e "
@@ -45,22 +49,22 @@ class SchedaCapacita(Scheda):
         if st.button("Esegui la prova della rete"):
             try:
                 with st.spinner("Addestro la rete su tutto lo storico (può volerci un minuto)…"):
-                    prova, prossima = Caricamento.prova_capacita(s, theta)
+                    prova, prossima = Caricamento.prova_capacita(s)
             except Exception as e:
                 st.error(str(e))
             else:
                 self._risultati(prova, prossima)
 
-    def _oggi(self, W: pd.DataFrame, s: pd.Series, theta: float) -> None:
+    def _oggi(self, W: pd.DataFrame, s: pd.Series, limiti: LimitiSpecifica) -> None:
         oggi, ieri = W.iloc[-1], W.iloc[-2]
-        dentro = 100 * float((s.dropna().iloc[-5:].abs() < theta).mean())
+        dentro = 100 * float(s.dropna().iloc[-5:].between(limiti.lsl, limiti.usl, inclusive="neither").mean())
         c1, c2, c3 = st.columns(3)
         c1.metric("Cp ultimi 5 giorni", f"{oggi.cp:.2f}", f"{oggi.cp - ieri.cp:+.2f} rispetto a ieri",
                   help=f"(USL − LSL) / 6σ, con σ = {oggi.sigma:.3f}. Il massimo mostrato è 10.")
         c2.metric("Cpk ultimi 5 giorni", f"{oggi.cpk:.2f}", f"{oggi.cpk - ieri.cpk:+.2f} rispetto a ieri",
                   help=f"min(USL − μ, μ − LSL) / 3σ, con media μ = {oggi.mu:+.2f}.")
         c3.metric("Giorni dentro la fascia", f"{dentro:.0f}%",
-                  help="Quota degli ultimi 5 giorni con score fra −θ e +θ, cioè con esito «neutro». Per Cp e Cpk i "
+                  help="Quota degli ultimi 5 giorni con score fra −1 e +1. Per Cp e Cpk i "
                        "valori fuori sono portati sul limite.")
 
     def _grafico(self, W: pd.DataFrame) -> None:
@@ -87,7 +91,7 @@ class SchedaCapacita(Scheda):
         s = prova.serie
         st.caption(
             f"Periodo di verifica: dal {s.fine.iloc[0]:%d/%m/%Y} al {s.fine.iloc[-1]:%d/%m/%Y}, {m.n_test} finestre · "
-            f"rete riaddestrata {m.n_passi} volte · giorni con score fuori da ±θ, portati sul limite: "
+            f"rete riaddestrata {m.n_passi} volte · giorni con score fuori da ±1, portati sul limite: "
             f"{100 * m.quota_tagliata:.0f}%. Due finestre vicine hanno 4 giorni su 5 in comune, quindi «domani come "
             "oggi» è un riferimento molto difficile da battere."
         )

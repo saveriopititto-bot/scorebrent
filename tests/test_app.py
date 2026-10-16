@@ -213,3 +213,12 @@ def test_colofon(rete):
     assert len(colofon(at)) == 1
     assert all(t in colofon(at)[0] for t in ("sCore lab", "v1.0", "Tutti i diritti riservati"))
     assert not colofon(avvia(query={"pagina": "score"}))  # non nella pagina per FuelMode
+
+
+def test_capacita_con_limiti_fissi(rete):
+    """Con θ diverso da 1 la scheda «Capacità dello score» usa sempre i limiti ±1."""
+    at = avvia(imposta=lambda at: widget(at, "slider", "Soglia (θ)").set_value(2.0),
+               sezione="Modelli", scheda="Capacità dello score")
+    nessun_errore(at)
+    assert any("I limiti restano ±1" in c for c in valori(at, "caption"))
+    assert any("**−1 e +1**" in m for m in valori(at, "markdown"))

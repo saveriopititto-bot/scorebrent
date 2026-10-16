@@ -74,16 +74,16 @@ L'app ha undici schede, divise nelle tre sezioni del menù.
   - Nella prova c'è anche un modello con il rischio geopolitico (GPR).
   - La prova a finestre scorrevoli confronta i modelli con tre riferimenti: «come nel periodo appena passato», «OVX così com'è» e «media storica».
   - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
-- **Capacità dello score**: quanto lo score resta stabile dentro la fascia «neutro», fra −θ e +θ.
-  - In alto Cp e Cpk degli ultimi 5 giorni di borsa, con la variazione rispetto a ieri, e la quota di quei giorni con esito neutro. Sotto, il grafico di Cp e Cpk nel periodo scelto.
-  - Cp alto vuol dire che lo score oscilla poco rispetto alla larghezza della fascia; Cpk basso che è vicino a uscirne da un lato. Sopra 1, se continua così, lo score resta quasi sempre neutro.
+- **Capacità dello score**: quanto lo score resta stabile fra i limiti fissi −1 e +1, le soglie dello score con θ = 1.
+  - In alto Cp e Cpk degli ultimi 5 giorni di borsa, con la variazione rispetto a ieri, e la quota di quei giorni con score fra −1 e +1. Sotto, il grafico di Cp e Cpk nel periodo scelto.
+  - Cp alto vuol dire che lo score oscilla poco rispetto alla larghezza della fascia; Cpk basso che è vicino a uscirne da un lato. Sopra 1, se continua così, lo score resta quasi sempre dentro la fascia.
   - Il bottone «Esegui la prova della rete» addestra la rete neurale (vedi «Capacità dello score (Cp e Cpk)» più sotto) a finestre scorrevoli e la confronta con «domani come oggi». Mostra errori, miglioramento, Cp e Cpk previsti per domani, il grafico del Cpk vero e previsto e l'area di Lévy confrontata con una passeggiata casuale. Ci vuole circa un minuto; poi il risultato resta in memoria finché non cambia lo score.
-  - Usa lo stesso score della scheda «Score rifornimento», quindi cambia con α e θ.
+  - Usa lo stesso score S della scheda «Score rifornimento», quindi cambia con α. I limiti non seguono θ: restano ±1 anche se nella barra laterale si sceglie un'altra soglia.
 - **Formule**: tutte le formule del modello matematico, con spiegazioni e passaggi, nell'ordine in cui vengono applicate: dati e notazione, variazioni e riepiloghi, area di Lévy, temperatura rispetto al normale, prova di previsione del rialzo (regressione logistica, Brier, AUC), oscillazione attesa (regressione ridge e correzione lognormale), fasce dei prossimi 5 giorni, score di rifornimento, prezzi alla pompa e capacità dello score (Cp, Cpk, area di Lévy di (S, dS) e back propagation della rete). Accanto a ogni formula c'è il nome della classe o del metodo del pacchetto `brent` che la calcola.
 
 ## Capacità dello score (Cp e Cpk)
 
-Lo script `cpk_levy_nn.py` tratta lo score di ogni giorno come un processo da tenere fra due limiti, USL = 1 e LSL = −1 (le soglie ±θ con θ = 1), e prova a prevedere quanto sarà «capace» nella finestra successiva. Lo stesso calcolo è nella scheda «Capacità dello score» della sezione Modelli, dove i limiti seguono θ (±θ invece di ±1).
+Lo script `cpk_levy_nn.py` tratta lo score di ogni giorno come un processo da tenere fra due limiti, USL = 1 e LSL = −1 (le soglie ±θ con θ = 1), e prova a prevedere quanto sarà «capace» nella finestra successiva. Lo stesso calcolo, con gli stessi limiti, è nella scheda «Capacità dello score» della sezione Modelli.
 
 1. **Serie**: lo score S di ogni giorno (o una colonna di un CSV), con i valori fuori da [−1, 1] portati sul limite. Lo script dice quanti giorni sono stati tagliati: con lo score del Brent sono molti, perché S supera spesso ±1.
 2. **Finestre** di 5 giorni con passo 1. Per ognuna: media μ, deviazione standard σ (ddof = 1, mai sotto 0.01), Cp = (USL − LSL) / 6σ e Cpk = min(USL − μ, μ − LSL) / 3σ, entrambi fra 0 e 10.
@@ -108,7 +108,7 @@ Sono nella barra laterale, in quattro gruppi, tranne la scelta della valuta, che
 | Gruppo | Impostazione | Cosa fa | Schede |
 |---|---|---|---|
 | Score rifornimento | Sensibilità alla turbolenza (α) | Quanto lo score si avvicina a «neutro» quando il mercato è più agitato del normale | Score rifornimento, Capacità dello score |
-| | Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento, Capacità dello score |
+| | Soglia (θ) | Di quante oscillazioni tipiche il Brent deve allontanarsi dalla media dei 30 giorni per dare +1 o −1 | Score rifornimento |
 | Prezzo e grafici | Periodo mostrato nei grafici | Da 1 mese a tutto lo storico | Score rifornimento, Pompa (Italia), Prezzo, Meteo, Geopolitica, Capacità dello score |
 | | Confronta con il prezzo di quanti giorni fa | Giorni per la variazione mostrata in alto | Prezzo, Andamento |
 | Analisi | Raggruppa i prezzi | Giorno per giorno o settimana per settimana | Andamento, Prova di previsione, Oscillazione attesa |

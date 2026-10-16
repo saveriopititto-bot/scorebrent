@@ -426,8 +426,8 @@ class SchedaFormule(Scheda):
         # ------------------------------------------------------------------
         self._sezione("10. Capacità dello score (`brent.capacita`)")
         st.markdown(
-            "Lo score $S_t$, portato dentro $[\\mathrm{LSL}, \\mathrm{USL}] = [-\\theta, +\\theta]$, si divide in "
-            "finestre di 5 giorni di borsa con passo 1. Su ognuna (`FinestreCapacita`), con $\\mu$ la media e "
+            "Lo score $S_t$, portato dentro $[\\mathrm{LSL}, \\mathrm{USL}] = [-1, +1]$ (le soglie con $\\theta = 1$, "
+            "fisse anche se si sceglie un'altra $\\theta$), si divide in finestre di 5 giorni di borsa con passo 1. Su ognuna (`FinestreCapacita`), con $\\mu$ la media e "
             "$\\sigma$ la deviazione standard campionaria (mai sotto 0,01):"
         )
         st.latex(r"C_p = \frac{\mathrm{USL} - \mathrm{LSL}}{6\sigma}, \qquad "
