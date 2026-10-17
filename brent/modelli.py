@@ -185,3 +185,98 @@ class Punteggi:
         """In quanti anni l'errore quadratico medio del modello è sotto quello del riferimento (vinti, anni)."""
         vinti = [np.mean(errore_modello[anni == k] ** 2) < np.mean(errore_rif[anni == k] ** 2) for k in np.unique(anni)]
         return int(sum(vinti)), len(vinti)
+
+    @staticmethod
+    def residui(reale, previsto) -> np.ndarray:
+        """Residui della previsione: reale - previsto."""
+        return np.asarray(reale, float) - np.asarray(previsto, float)
+
+    @staticmethod
+    def identifica_outlier(reale, previsto, soglia_sigma: float = 2.5) -> np.ndarray:
+        """Maschera booleana dei casi in cui l'errore |reale - previsto| supera soglia_sigma deviazioni standard dal residuo medio."""
+        e = Punteggi.residui(reale, previsto)
+        sd = float(np.nanstd(e))
+        if sd == 0 or np.isnan(sd):
+            return np.zeros(len(e), dtype=bool)
+        return np.abs(e - float(np.nanmean(e))) > soglia_sigma * sd
+
+    @staticmethod
+    def tabella_outliers(
+        reale,
+        previsto,
+        date=None,
+        soglia_sigma: float = 2.5,
+    ) -> pd.DataFrame:
+        """Restituisce un DataFrame con i soli casi outlier (|errore| > soglia_sigma * sd)."""
+        r = np.asarray(reale, float)
+        p = np.asarray(previsto, float)
+        e = Punteggi.residui(r, p)
+        sd = float(np.nanstd(e))
+        me = float(np.nanmean(e))
+        z = (e - me) / sd if sd > 0 else np.zeros_like(e)
+        maschera = np.abs(z) > soglia_sigma
+        dati: dict[str, np.ndarray | pd.Series] = {}
+        if date is not None:
+            dati["Data"] = pd.to_datetime(np.asarray(date)[maschera])
+        dati["Valore"] = r[maschera]
+        dati["Previsto"] = p[maschera]
+        dati["Scostamento"] = e[maschera]
+        dati["Z_score"] = z[maschera]
+        return pd.DataFrame(dati)
+
+
+def grafico_outliers(
+    reale: np.ndarray | pd.Series,
+    previsto: np.ndarray | pd.Series,
+    date: np.ndarray | pd.Series | pd.Index | None = None,
+    soglia_sigma: float = 2.5,
+    titolo_y: str = "Valore",
+    colori: list[str] | None = None,
+):
+    """Grafico Altair che confronta reale e previsto evidenziando gli outlier (scostamenti oltre soglia_sigma)."""
+    import altair as alt
+
+    r = np.asarray(reale, float)
+    p = np.asarray(previsto, float)
+    df = pd.DataFrame({"Reale": r, "Previsto": p})
+    if date is not None:
+        df["Data"] = pd.to_datetime(np.asarray(date))
+        asse_x = alt.X("Data:T", title=None, axis=alt.Axis(format="%d/%m/%y"))
+    else:
+        df["Data"] = np.arange(len(r))
+        asse_x = alt.X("Data:Q", title="Indice")
+
+    outliers = Punteggi.tabella_outliers(r, p, date=df["Data"], soglia_sigma=soglia_sigma)
+    m = df.melt("Data", value_vars=["Reale", "Previsto"], var_name="Serie", value_name="Valore").dropna()
+    colore = alt.Color(
+        "Serie:N",
+        title=None,
+        sort=["Reale", "Previsto"],
+        scale=alt.Scale(domain=["Reale", "Previsto"], range=colori) if colori else alt.Undefined,
+        legend=alt.Legend(orient="bottom"),
+    )
+    linee = alt.Chart(m).mark_line().encode(
+        x=asse_x,
+        y=alt.Y("Valore:Q", title=titolo_y, scale=alt.Scale(zero=False)),
+        color=colore,
+        tooltip=[
+            alt.Tooltip("Data:T" if date is not None else "Data:Q", title="Data", format="%d/%m/%Y" if date is not None else None),
+            alt.Tooltip("Serie:N", title="Serie"),
+            alt.Tooltip("Valore:Q", title="Valore", format=".2f"),
+        ],
+    )
+    if outliers.empty:
+        return linee
+
+    punti = alt.Chart(outliers).mark_circle(size=50, color="#d64545").encode(
+        x=asse_x,
+        y=alt.Y("Valore:Q"),
+        tooltip=[
+            alt.Tooltip("Data:T" if date is not None else "Data:Q", title="Data (Outlier)", format="%d/%m/%Y" if date is not None else None),
+            alt.Tooltip("Valore:Q", title="Reale", format=".2f"),
+            alt.Tooltip("Previsto:Q", title="Previsto", format=".2f"),
+            alt.Tooltip("Scostamento:Q", title="Scostamento", format="%+.2f"),
+            alt.Tooltip("Z_score:Q", title="Deviazioni (σ)", format="+.1f"),
+        ],
+    )
+    return linee + punti

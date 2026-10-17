@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import streamlit as st
 
+from brent.modelli import Punteggi
 from brent.oscillazione import PrevisioneOscillazione, ProvaOscillazione
 
 from ..grafici import Grafici
@@ -123,7 +124,24 @@ class SchedaOscillazione(Scheda):
             st.info("Il modello non fa meglio, in modo costante, che ripetere l'oscillazione del periodo appena "
                     "passato.")
         nome_m = migliore["Previsione"]
-        Grafici.nel_tempo(serie_o.assign(Data=date[serie_o["t"]]).set_index("Data")[["Reale", nome_m]]
-                          .rename(columns={"Reale": "Oscillazione vera", nome_m: "Prevista"})
-                          .rolling(passo, min_periods=1).mean(), f"% {al_periodo}")
-        st.caption(f"Oscillazione vera e prevista nel periodo di verifica (media mobile su {passo} {unita}).")
+        date_serie = date[serie_o["t"]].to_numpy()
+        reale_p = serie_o["Reale"].to_numpy()
+        prev_p = serie_o[nome_m].to_numpy()
+        df_out = Punteggi.tabella_outliers(reale_p, prev_p, date=date_serie, soglia_sigma=2.5)
+
+        Grafici.nel_tempo(
+            serie_o.assign(Data=date[serie_o["t"]])
+            .set_index("Data")[["Reale", nome_m]]
+            .rename(columns={"Reale": "Oscillazione vera", nome_m: "Prevista"})
+            .rolling(passo, min_periods=1)
+            .mean(),
+            f"% {al_periodo}",
+            outliers=df_out,
+        )
+        n_out = len(df_out)
+        nota_out = (
+            f" I punti rossi indicano {n_out} periodi anomali (outlier: scostamento > 2.5 σ rispetto alla previsione)."
+            if n_out
+            else ""
+        )
+        st.caption(f"Oscillazione vera e prevista nel periodo di verifica (media mobile su {passo} {unita}).{nota_out}")

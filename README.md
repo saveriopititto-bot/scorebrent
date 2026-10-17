@@ -73,6 +73,7 @@ L'app ha undici schede, divise nelle tre sezioni del menù.
   - La scheda mostra anche l'OVX di oggi, tradotto in oscillazione attesa al giorno o alla settimana.
   - Nella prova c'è anche un modello con il rischio geopolitico (GPR).
   - La prova a finestre scorrevoli confronta i modelli con tre riferimenti: «come nel periodo appena passato», «OVX così com'è» e «media storica».
+<<<<<<< Updated upstream
   - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista.
 - **Capacità dello score**: quanto lo score resta stabile fra i limiti fissi −1 e +1, le soglie dello score con θ = 1.
   - In alto Cp e Cpk degli ultimi 5 giorni di borsa, con la variazione rispetto a ieri, e la quota di quei giorni con score fra −1 e +1. Sotto, il grafico di Cp e Cpk nel periodo scelto.
@@ -100,6 +101,10 @@ python cpk_levy_nn.py --csv dati.csv --col score_gg
 Altre opzioni: `--finestra`, `--train`, `--passo`, `--nascosti`, `--epoche`, `--alpha` e `--theta` (con `--brent`).
 
 **Come leggere il risultato**: due finestre vicine hanno 4 giorni su 5 in comune, quindi «domani come oggi» è un riferimento molto difficile da battere. Sui dati sintetici e sullo score calcolato dai prezzi sintetici dei test la rete fa peggio del riferimento (miglioramento negativo). Una rete utile deve avere miglioramento positivo, non solo un MAE piccolo.
+=======
+  - Gli errori sono misurati come *bias* (errore medio), *MAD* (errore assoluto medio) e *sigma* (deviazione standard dell'errore). Un grafico mostra l'oscillazione vera e quella prevista, con i punti outlier evidenziati.
+- **Formule**: tutte le formule del modello matematico, con spiegazioni e passaggi, nell'ordine in cui vengono applicate: dati e notazione, variazioni e riepiloghi, area di Lévy, temperatura rispetto al normale, prova di previsione del rialzo (regressione logistica, Brier, AUC), oscillazione attesa (regressione ridge e correzione lognormale), fasce dei prossimi 5 giorni, score di rifornimento e prezzi alla pompa. Accanto a ogni formula c'è il nome della classe o del metodo del pacchetto `brent` che la calcola.
+>>>>>>> Stashed changes
 
 ## Impostazioni
 
@@ -322,7 +327,7 @@ Se una modifica al modello cambia i risultati di proposito, `test_regressione.py
 | `brent/mercato.py` | `PrezziBrent` (prezzi in euro, raggruppati per giorno o settimana), `Frequenza`, `Ovx` (volatilità per periodo) e `SerieAnalisi` (le serie x, y, m, o, g allineate). |
 | `brent/cammino.py` | `Percorso` e `Riepilogo` (variazioni fra periodi, riepiloghi e linearità), `CamminoPiano` (area di Lévy, anche su finestra mobile). |
 | `brent/meteo.py` | `AnomaliaStagionale`: temperatura rispetto al normale. |
-| `brent/modelli.py` | I mattoni dei modelli: `InsiemiPredittori`, `Standardizzatore`, `RegressioneLogistica`, `RegressioneRidge`, `FinestreScorrevoli` (prova senza usare il futuro) e `Punteggi` (Brier, AUC, anni vinti). |
+| `brent/modelli.py` | I mattoni dei modelli: `InsiemiPredittori`, `Standardizzatore`, `RegressioneLogistica`, `RegressioneRidge`, `FinestreScorrevoli` (prova senza usare il futuro), `Punteggi` (Brier, AUC, anni vinti, residui e outliers) e `grafico_outliers`. |
 | `brent/rialzo.py` | `PrevisioneRialzo`: predittori della finestra mobile e prova della previsione del rialzo. |
 | `brent/oscillazione.py` | `PrevisioneOscillazione`: predittori, previsione, previsione scorrevole e prova dell'oscillazione. |
 | `brent/score.py` | `ScoreRifornimento` (score, storico e verifica sul Brent), `Esito` (+1, 0, −1) e `StoricoScore`. |

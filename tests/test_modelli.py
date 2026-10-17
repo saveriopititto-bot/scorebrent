@@ -105,3 +105,27 @@ def test_insiemi_predittori():
     f = pd.DataFrame(columns=["x", "y"])
     assert ins.risolvi(f) == {"a": ["x"], "Tutto": ["x", "y"]}
     assert ins["Tutto"] == ["x", "y", "z"] and "b" in ins and list(ins) == ["a", "b", "Tutto"]
+
+
+def test_punteggi_outliers():
+    reale = np.array([1.0, 1.2, 1.1, 1.0, 5.0, 1.05])
+    previsto = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    res = Punteggi.residui(reale, previsto)
+    np.testing.assert_allclose(res, [0.0, 0.2, 0.1, 0.0, 4.0, 0.05])
+    out = Punteggi.identifica_outlier(reale, previsto, soglia_sigma=2.0)
+    assert out.sum() == 1 and out[4]
+
+    date = pd.date_range("2024-01-01", periods=6)
+    tab = Punteggi.tabella_outliers(reale, previsto, date=date, soglia_sigma=2.0)
+    assert len(tab) == 1
+    assert tab["Valore"].iloc[0] == 5.0
+    assert tab["Scostamento"].iloc[0] == 4.0
+    assert tab["Data"].iloc[0] == pd.Timestamp("2024-01-05")
+
+
+def test_grafico_outliers():
+    from brent.modelli import grafico_outliers
+    reale = np.array([1.0, 1.1, 1.0, 5.0, 1.0])
+    previsto = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
+    chart = grafico_outliers(reale, previsto, soglia_sigma=1.8)
+    assert chart is not None
